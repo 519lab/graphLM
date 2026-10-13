@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -87,9 +88,15 @@ class FileFragment:
     so cycle risk scores weigh a large file by its real size, not by the
     ``max_file_chars`` slice. Defaults to counting ``content`` for hand-built
     fragments.
+
+    ``_import_cache`` is set only for an oversized Python file whose raw disk
+    bytes are the buffer the skeleton was rendered from: ``(resolved path,
+    sha256 of those bytes, import carriers)``. ``build_dependency_graph``
+    reuses the carriers instead of parsing again, then clears the slot. It is
+    not a tree, and it is not a process-wide cache.
     """
 
-    __slots__ = ("rel_path", "content", "estimated_tokens", "line_count")
+    __slots__ = ("rel_path", "content", "estimated_tokens", "line_count", "_import_cache")
 
     def __init__(
         self,
@@ -102,6 +109,7 @@ class FileFragment:
         self.content = content
         self.estimated_tokens = estimated_tokens
         self.line_count = line_count if line_count is not None else content.count("\n") + 1
+        self._import_cache: tuple[str, str, list] | None = None
 
 
 class ScanResult:
@@ -140,6 +148,41 @@ def estimate_tokens(text: str) -> int:
 def _is_binary(path: Path) -> bool:
     """Check if a file is likely binary by extension."""
     return path.suffix.lower() in _BINARY_EXTS
+
+
+def _read_bytes(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except (OSError, PermissionError):
+        return None
+
+
+def _python_skeleton_and_imports(path: Path, code: bytes) -> tuple[str, list] | None:
+    """One Tree-sitter parse of ``code``: skeleton text and import carriers.
+
+    None means the same as ``skeleton_for`` returning None (no grammar, or the
+    renderer failed). The tree is dropped before return — only the rendered
+    text and the string carriers are kept, on the fragment, until the AST pass.
+    """
+    from graphlm.parsers.base import (
+        PYTHON,
+        _GrammarUnavailable,
+        _backend,
+        _warn_grammar_unavailable,
+    )
+    from graphlm.parsers.python import _parse_python_imports, skeleton
+
+    try:
+        tree = _backend.parse_source(code, PYTHON)
+        text = skeleton(code, tree=tree)
+        carriers = _parse_python_imports(tree)
+    except _GrammarUnavailable:
+        _warn_grammar_unavailable(PYTHON)
+        return None
+    except Exception as e:
+        logger.debug("Skeleton failed for %s: %s", path, e)
+        return None
+    return text, carriers
 
 
 def scan_project(
@@ -435,11 +478,32 @@ def scan_project(
             # Captured before any cut so cycle scoring sees the real size.
             line_count = content.count("\n") + 1
             truncated = False
+            import_cache = None
             if len(content) > max_file_chars:
                 # Prefer the signature skeleton (every symbol) over the head of
                 # the file (the first few). The cap applies only if the skeleton
                 # is *still* over it (bodies already gone) or no renderer exists.
-                skel = skeleton_for(fpath, content.encode("utf-8")) if skeleton else None
+                # Python shares one parse of the raw bytes with import extraction
+                # when those bytes are exactly the text buffer (valid UTF-8, LF).
+                # A mismatch keeps the two parses, so the skeleton stays a
+                # function of the text read and edges stay a function of disk.
+                encoded = content.encode("utf-8")
+                skel = None
+                if skeleton and fpath.suffix.lower() == ".py":
+                    raw = _read_bytes(fpath)
+                    if raw == encoded:
+                        shared = _python_skeleton_and_imports(fpath, raw)
+                        if shared is not None:
+                            skel, carriers = shared
+                            import_cache = (
+                                str(fpath.resolve()),
+                                hashlib.sha256(raw).hexdigest(),
+                                carriers,
+                            )
+                    else:
+                        skel = skeleton_for(fpath, encoded)
+                elif skeleton:
+                    skel = skeleton_for(fpath, encoded)
                 content = skel if skel is not None else content
                 if len(content) > max_file_chars:
                     content = content[:max_file_chars]
@@ -452,7 +516,9 @@ def scan_project(
 
             rel = str(fpath.relative_to(project_dir))
             tokens = estimate_tokens(content)
-            file_fragments.append(FileFragment(rel, content, tokens, line_count))
+            frag = FileFragment(rel, content, tokens, line_count)
+            frag._import_cache = import_cache
+            file_fragments.append(frag)
             file_count += 1
             if truncated:
                 logger.debug("Truncated %s to %d chars", rel, max_file_chars)

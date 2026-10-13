@@ -9,6 +9,7 @@ and this project adheres to Semantic Versioning.
 
 ### Changed
 
+- **Oversized Python files are parsed once.** A file over the per-file character cap was parsed to build its signature skeleton and parsed again to extract imports. When the bytes on disk are the text that skeleton is rendered from, both come from that one Tree-sitter parse. The model still receives the redacted skeleton (skeleton first, then redaction), and import edges still resolve from the raw file. The tree is not kept — only the import carriers, dropped once the dependency graph is built. A newline or encoding mismatch keeps the two parses, so neither result changes.
 - **Scanning a large tree does less work for the same map.** Exact exclude names (built-ins, `--exclude`, `.graphlmignore`) are a set lookup; `fnmatch` runs only for patterns that contain a glob character. The directory tree and the file list come from one `os.scandir` walk. Which files are selected, their order, the tree text, and the symlink / nested-checkout / sensitive-file checks are unchanged.
 - **Startup no longer imports httpx.** `import graphlm`, `graphlm --help`, `--version`, `--dry-run`, and `--serve` do not load the HTTP client (or Rich, which httpx pulls in). httpx loads on the first real LLM call. The output-token ceiling moved to `graphlm.limits` so configuration does not import the client to read an integer; `graphlm.llm.LLM_MAX_OUTPUT_TOKENS` still re-exports it. Redaction and the parsers still load at import.
 
