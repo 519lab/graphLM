@@ -205,7 +205,7 @@ def generate_graph(
     if max_output_tokens is None:
         import os
 
-        from graphlm.llm import LLM_MAX_OUTPUT_TOKENS
+        from graphlm.limits import LLM_MAX_OUTPUT_TOKENS
 
         max_output_tokens = int(
             os.environ.get("GRAPHLM_MAX_OUTPUT_TOKENS", str(LLM_MAX_OUTPUT_TOKENS))

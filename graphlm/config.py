@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
-from graphlm.llm import LLM_MAX_OUTPUT_TOKENS
+from graphlm.limits import LLM_MAX_OUTPUT_TOKENS
 
 
 def _user_config_path() -> Path:
@@ -53,8 +53,9 @@ _DEFAULT_MAX_CONTEXT = 120000
 # and a large project's generation can take minutes (#18). Mirrors
 # llm._DEFAULT_TIMEOUT; overridable via GRAPHLM_TIMEOUT / --timeout.
 _DEFAULT_TIMEOUT = 300.0
-# Default max output tokens — sourced from llm.py so the two cannot drift. Sized
-# from measurement (a real project's full graph needs ~18k output tokens — #18);
+# Default max output tokens — sourced from limits.py (the same integer llm.py
+# re-exports) so this module does not import the HTTP client. Sized from
+# measurement (a real project's full graph needs ~18k output tokens — #18);
 # overridable via GRAPHLM_MAX_OUTPUT_TOKENS / --max-output-tokens.
 _DEFAULT_MAX_OUTPUT_TOKENS = LLM_MAX_OUTPUT_TOKENS
 
