@@ -28,7 +28,7 @@ uv run mypy graphlm --ignore-missing-imports # type check (separate CI job; keep
 graphlm /path/to/project --dry-run           # exercise scan + AST + context packing without any LLM call
 ```
 
-CI (`.github/workflows/ci.yml`) runs pytest+coverage on Python 3.11/3.12/3.13 (base + `mcp` extra — language-pack enabled-path tests skip), a separate `test-packs` job with `graphlm[all]` on 3.12 (the enabled path), and mypy on 3.12. There is no linter/formatter configured — match surrounding style.
+CI (`.github/workflows/ci.yml`) runs pytest+coverage on Python 3.11/3.12/3.13 (base + `mcp` extra — language-pack and `typesafe` enabled-path tests skip), a separate `test-packs` job with `graphlm[all,mcp,typesafe]` on 3.12 (the enabled path — `--extra typesafe` so `tests/test_evidence.py`'s fake-client tests run in CI instead of skipping, #188), and mypy on 3.12. There is no linter/formatter configured — match surrounding style.
 
 ## Architecture — the big picture
 
