@@ -7,6 +7,10 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- **Scanning a large tree does less work for the same map.** Exact exclude names (built-ins, `--exclude`, `.graphlmignore`) are a set lookup; `fnmatch` runs only for patterns that contain a glob character. The directory tree and the file list come from one `os.scandir` walk. Which files are selected, their order, the tree text, and the symlink / nested-checkout / sensitive-file checks are unchanged.
+
 ## [0.6.0] - 2026-09-23
 
 ### Changed
