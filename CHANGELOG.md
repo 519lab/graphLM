@@ -7,6 +7,13 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Infrastructure
+- Dependabot now opens weekly dependency PRs for the `uv` lockfile and for
+  GitHub Actions (`.github/dependabot.yml`), with minor and patch updates
+  grouped into one PR. A new `dependabot-auto-merge` workflow enables squash
+  auto-merge on patch/minor Dependabot PRs once required CI checks pass; major
+  updates stay open for manual review.
+
 ### Changed
 
 - **Oversized Python files are parsed once.** A file over the per-file character cap was parsed to build its signature skeleton and parsed again to extract imports. When the bytes on disk are the text that skeleton is rendered from, both come from that one Tree-sitter parse. The model still receives the redacted skeleton (skeleton first, then redaction), and import edges still resolve from the raw file. The tree is not kept — only the import carriers, dropped once the dependency graph is built. A newline or encoding mismatch keeps the two parses, so neither result changes.
