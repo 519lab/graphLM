@@ -44,9 +44,10 @@ uv run mypy graphlm --ignore-missing-imports       # type check
 ```
 
 CI runs the suite on Python 3.11 / 3.12 / 3.13 (base + `mcp` extra — language-pack
-enabled-path tests skip), a separate `test-packs` job with `graphlm[all]` on 3.12,
-and mypy on 3.12 (see `.github/workflows/ci.yml`). There is **no linter or
-formatter** configured — match the style of the surrounding code.
+and `typesafe` enabled-path tests skip), a separate `test-packs` job with
+`graphlm[all,mcp,typesafe]` on 3.12 (so the language-pack **and** TypeSafe
+fake-client tests run), and mypy on 3.12 (see `.github/workflows/ci.yml`). There
+is **no linter or formatter** configured — match the style of the surrounding code.
 
 `graphlm <project> --dry-run` is a handy no-network smoke test: it exercises the
 scan, AST parse, and context packing without any LLM call.
@@ -144,18 +145,30 @@ steps are automated with [bump-my-version](https://github.com/callowayproject/bu
 4. Make a GPG-signed `chore(release): X.Y.Z` commit, push the release branch,
    open a PR, and wait for every PR check to pass. Merge the approved PR and
    wait for CI on the resulting `origin/main` commit.
-5. From a clean, synchronized `main`, create and verify a signed tag on that
-   exact commit, then push **only that tag**:
+5. Create, verify, and push a signed tag on the promoted `origin/main` commit.
+   Tag `origin/main` **by name** so this works from any checkout — you do not
+   need `main` checked out (and it may be checked out in another worktree; run
+   `git worktree list` if a `checkout` ever fails). The block is `&&`-chained
+   and the sanity check **hard-fails** (`|| exit 1`) so a mismatch stops before
+   the irreversible `push`:
 
    ```bash
-   git tag -s vX.Y.Z -m "graphlm vX.Y.Z"
-   git verify-tag vX.Y.Z
-   test "$(git rev-parse 'vX.Y.Z^{}')" = "$(git rev-parse origin/main)"
+   git fetch origin && \
+   git tag -s vX.Y.Z origin/main -m "graphlm vX.Y.Z" && \
+   git verify-tag vX.Y.Z && \
+   { test "$(git rev-parse 'vX.Y.Z^{}')" = "$(git rev-parse origin/main)" \
+       || { echo "ABORT: tag is not on origin/main"; exit 1; }; } && \
    git push origin refs/tags/vX.Y.Z
    ```
 
    The tag fires the release workflow. Watch its build, GitHub Release, and
    PyPI jobs through completion, then verify a clean install from PyPI.
+
+   > A tag push is irreversible for a published version. If the tag ever lands
+   > on the wrong commit, do **not** delete-and-re-push — that re-fires the
+   > release workflow and the PyPI upload fails (a version can't be reused).
+   > If the mistaken tag's tree is identical to `origin/main`, the published
+   > artifacts are unaffected; leave it.
 
 Publishing is irreversible (a PyPI version can't be reused); rehearse risky
 changes against TestPyPI first via the workflow's `workflow_dispatch` →

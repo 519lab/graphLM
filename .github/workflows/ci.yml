@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 # No job needs to write anything (no releases, no PR comments, no checks
 # API calls) — read-only is the least privilege the checkout + test/typecheck
@@ -69,10 +69,13 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
-      - name: Install dependencies (language packs + mcp)
-        run: uv sync --group dev --extra mcp --extra all
+      - name: Install dependencies (language packs + mcp + typesafe)
+        run: uv sync --group dev --extra mcp --extra all --extra typesafe
 
       - name: Run tests
+        # --extra typesafe so tests/test_evidence.py (importorskip typesafe_sdk,
+        # fake client — no API key needed) actually runs in CI instead of
+        # skipping silently (#188). typesafe-sdk resolves from public PyPI.
         run: uv run pytest -q
 
   typecheck:

@@ -7,10 +7,13 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
-import httpx
-
+from graphlm.limits import LLM_MAX_OUTPUT_TOKENS
 from graphlm.models import CodebaseGraph
+
+if TYPE_CHECKING:
+    import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -20,22 +23,29 @@ logger = logging.getLogger(__name__)
 _DEFAULT_TIMEOUT = 300.0
 _MAX_RETRIES = 2
 _RETRY_DELAY = 2.0
-# Default max output tokens (the `max_tokens` the client requests). This is a
-# *ceiling*, not a reservation — the model stops when its response is complete,
-# so a high value costs nothing (no extra latency, tokens, or budget) but stops
-# a large project's graph from truncating mid-JSON. Truncation defeats the whole
-# tool, so the default is the model's practical output max rather than a tight
-# guess: 128000 is what the Claude/GPT entries on the target endpoint advertise
-# as max_output_tokens, and the Qwen endpoint accepts >=200k. Overridable via
-# GRAPHLM_MAX_OUTPUT_TOKENS / --max-output-tokens (#25).
-#
-# NOTE: on the target OpenAI-compatible endpoint, input and output ceilings are
-# INDEPENDENT (measured: 180k input + 200k max_tokens = 380k combined is
-# accepted), so this does NOT come out of the input budget (max_context) — that
-# was a false assumption in #17/#18, now unwound (#25). Some other servers
-# (vLLM max_model_len, Anthropic) do bound prompt+generation together; anyone on
-# such an endpoint lowers this via the flag.
-LLM_MAX_OUTPUT_TOKENS = 128000
+
+
+def _load_httpx() -> Any:
+    """Import httpx on first use and cache it as ``graphlm.llm.httpx``.
+
+    Importing this module must not import httpx: ``import graphlm``,
+    ``--help``, ``--version``, ``--dry-run``, and ``--serve`` never make an
+    LLM call. The cached module object is the patch target
+    ``graphlm.llm.httpx.Client`` (tests bind a spy there before ``call_llm``).
+    """
+    cached = globals().get("httpx")
+    if cached is not None:
+        return cached
+    import httpx
+
+    globals()["httpx"] = httpx
+    return httpx
+
+
+def __getattr__(name: str) -> Any:
+    if name == "httpx":
+        return _load_httpx()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class GraphLLError(Exception):
@@ -275,6 +285,8 @@ def call_llm(
         GraphLLErrorResponse: If the LLM returns an error response.
         GraphLLErrorParse: If the response cannot be parsed.
     """
+    httpx = _load_httpx()
+
     if not base_url or not api_key:
         raise GraphLLErrorUnconfigured("base_url and api_key are required")
 

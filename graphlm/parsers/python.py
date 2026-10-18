@@ -360,15 +360,11 @@ def _edge_kind(imp: _ParsedImport) -> str:
 
 
 # --- Signature skeleton --------------------------------------------------------
-#
 # Renders a module as its API surface — imports, class/def signatures with the
 # first docstring line, short constants — with every body elided. The scanner
-# sends this instead of the *head* of an oversized file (innovation #2): the
-# first max_file_chars of a 1500-line module showed the imports and one class
-# and nothing else, so the LLM's file_summaries / symbols / entry_points for big
-# files were guesses. Signatures are exact, so the model summarises what is
-# really there. Everything here walks tree.root_node directly (no queries), so
-# the output is a deterministic function of the source bytes.
+# sends this instead of the head of an oversized file so the model sees every
+# symbol. Signatures are exact. Output is a deterministic function of the
+# source bytes (byte offsets only; no queries).
 
 SKELETON_HEADER = "# [graphlm skeleton: bodies elided; {n} source lines]"
 
@@ -560,7 +556,7 @@ def _emit_statement(code: bytes, node, out: list[str], *, nested: bool = False) 
     # is a body, not API surface — dropped.
 
 
-def skeleton(code: bytes) -> str:
+def skeleton(code: bytes, *, tree=None) -> str:
     """Render a Python module as its signature skeleton.
 
     Output is valid-looking Python: the module docstring head, imports
@@ -572,10 +568,14 @@ def skeleton(code: bytes) -> str:
     implementation, not API, so it does not appear. The first line is the
     marker the pass-2 prompt explains to the model.
 
+    ``tree``, when passed, must be a parse of these same bytes (the scanner
+    shares that parse with import extraction). Omitted, this parses ``code``.
+
     Raises ``_GrammarUnavailable`` (from the backend) if the Python grammar is
     not importable; ``skeleton_for`` turns that into ``None``.
     """
-    tree = _backend.parse_source(code, PYTHON)
+    if tree is None:
+        tree = _backend.parse_source(code, PYTHON)
     out: list[str] = [SKELETON_HEADER.format(n=code.count(b"\n") + 1)]
     root = tree.root_node
     doc = _docstring_node(root)

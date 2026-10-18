@@ -64,10 +64,10 @@ cpp = [
     "tree-sitter-cpp>=0.23,<0.24",
 ]
 # Go Tree-sitter grammar. Resolver in `graphlm/parsers/go.py`.
-go = ["tree-sitter-go>=0.23,<0.24"]
+go = ["tree-sitter-go>=0.23,<0.26"]
 # PHP Tree-sitter grammar. Resolver in `graphlm/parsers/php.py`.
 # language_php() (not language()) — the wheel also ships php_only.
-php = ["tree-sitter-php>=0.23,<0.25"]
+php = ["tree-sitter-php>=0.23,<0.26"]
 # TypeSafe/Jev SDK for prose evidence-scoring (a downstream-trust weight on the
 # LLM's summaries). Opt-in — it talks to a commercial third-party API and needs
 # a TYPESAFE_API_KEY, so it is never a base dependency. Offered by the first-run

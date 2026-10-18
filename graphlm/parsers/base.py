@@ -16,6 +16,7 @@ edges for that language.
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import logging
 from dataclasses import dataclass, field
@@ -437,6 +438,30 @@ def _dedupe_edges(edges: list[ImportEdge]) -> list[ImportEdge]:
     return unique
 
 
+def _cached_python_imports(
+    frag: FileFragment, project_dir: Path | None, code: bytes
+) -> list | None:
+    """Import carriers from the skeleton parse of these same bytes, or None.
+
+    The slot is cleared on every call so a fragment cannot reuse a parse
+    against later bytes, and so the carriers do not outlive the graph build.
+    A hit requires ``project_dir`` (the resolver's raw disk bytes, not the
+    redacted fragment text), the same resolved path, and a matching hash.
+    """
+    cached = frag._import_cache
+    frag._import_cache = None
+    if cached is None or project_dir is None:
+        return None
+    resolved, digest, carriers = cached
+    try:
+        current = str((project_dir / frag.rel_path).resolve())
+    except OSError:
+        return None
+    if current != resolved or hashlib.sha256(code).hexdigest() != digest:
+        return None
+    return carriers
+
+
 def build_dependency_graph(
     fragments: list[FileFragment],
     max_files: int = 200,
@@ -490,7 +515,12 @@ def build_dependency_graph(
             roots_by_language[language] = resolver.source_roots(known_files)
         roots = roots_by_language[language]
         try:
-            imports = resolver.imports_from_source(code, Path(rel_path))
+            cached = _cached_python_imports(frag, project_dir, code)
+            imports = (
+                cached
+                if cached is not None
+                else resolver.imports_from_source(code, Path(rel_path))
+            )
             for imp in imports:
                 targets = resolver.resolve(imp, rel_path, known_files, roots)
                 if (
@@ -512,6 +542,8 @@ def build_dependency_graph(
             _warn_grammar_unavailable(str(e) or language)
             continue
 
+    for frag in fragments:
+        frag._import_cache = None
     return _dedupe_edges(all_edges)
 
 

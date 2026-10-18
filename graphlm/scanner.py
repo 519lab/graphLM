@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -87,9 +88,15 @@ class FileFragment:
     so cycle risk scores weigh a large file by its real size, not by the
     ``max_file_chars`` slice. Defaults to counting ``content`` for hand-built
     fragments.
+
+    ``_import_cache`` is set only for an oversized Python file whose raw disk
+    bytes are the buffer the skeleton was rendered from: ``(resolved path,
+    sha256 of those bytes, import carriers)``. ``build_dependency_graph``
+    reuses the carriers instead of parsing again, then clears the slot. It is
+    not a tree, and it is not a process-wide cache.
     """
 
-    __slots__ = ("rel_path", "content", "estimated_tokens", "line_count")
+    __slots__ = ("rel_path", "content", "estimated_tokens", "line_count", "_import_cache")
 
     def __init__(
         self,
@@ -102,6 +109,7 @@ class FileFragment:
         self.content = content
         self.estimated_tokens = estimated_tokens
         self.line_count = line_count if line_count is not None else content.count("\n") + 1
+        self._import_cache: tuple[str, str, list] | None = None
 
 
 class ScanResult:
@@ -140,6 +148,41 @@ def estimate_tokens(text: str) -> int:
 def _is_binary(path: Path) -> bool:
     """Check if a file is likely binary by extension."""
     return path.suffix.lower() in _BINARY_EXTS
+
+
+def _read_bytes(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except (OSError, PermissionError):
+        return None
+
+
+def _python_skeleton_and_imports(path: Path, code: bytes) -> tuple[str, list] | None:
+    """One Tree-sitter parse of ``code``: skeleton text and import carriers.
+
+    None means the same as ``skeleton_for`` returning None (no grammar, or the
+    renderer failed). The tree is dropped before return — only the rendered
+    text and the string carriers are kept, on the fragment, until the AST pass.
+    """
+    from graphlm.parsers.base import (
+        PYTHON,
+        _GrammarUnavailable,
+        _backend,
+        _warn_grammar_unavailable,
+    )
+    from graphlm.parsers.python import _parse_python_imports, skeleton
+
+    try:
+        tree = _backend.parse_source(code, PYTHON)
+        text = skeleton(code, tree=tree)
+        carriers = _parse_python_imports(tree)
+    except _GrammarUnavailable:
+        _warn_grammar_unavailable(PYTHON)
+        return None
+    except Exception as e:
+        logger.debug("Skeleton failed for %s: %s", path, e)
+        return None
+    return text, carriers
 
 
 def scan_project(
@@ -198,116 +241,25 @@ def scan_project(
     ignore_pats = load_graphlmignore(project_dir) if use_graphlmignore else ()
     all_exclude = tuple(_ALWAYS_EXCLUDE | set(exclude_patterns) | set(ignore_pats))
 
-    # Phase 1: Build the directory tree
+    # One scandir walk builds the directory tree and the ranked file list.
+    # The tree still stops at the per-directory cap and the total-line ceiling;
+    # file collection keeps going through directories the tree did not list
+    # (omitted tail, and everything past the line ceiling). That split is what
+    # the old tree walk + os.walk pair did. skipped_count stays the sum of both
+    # old walks: a directory the tree entered counts the tree's skips, and
+    # sensitive files plus escaping symlink *files* are also counted by the
+    # file walk (so a tree-entered sensitive file counts twice).
     tree_lines = [str(project_dir.name) + "/"]
     skipped_count = 0
     # Absolute ceiling on total tree lines — the per-directory cap alone only
     # bounds the tree at max_tree_entries_per_dir × (number of directories), so
     # a repo with thousands of directories could still overflow. This total
     # backstop makes "the pass-1 tree is bounded" a real guarantee regardless of
-    # directory count (#17). Once hit, the walk stops and a final marker is
-    # appended after the loop.
+    # directory count (#17). Once hit, the tree stops growing and a final
+    # marker is appended after the loop. File collection is not stopped.
     max_tree_lines = max_tree_entries_per_dir * _TREE_TOTAL_LINE_MULTIPLIER
     tree_stopped = False
-
-    def _walk_dir(dir_path: Path, indent: str = "  ") -> None:
-        nonlocal skipped_count, tree_stopped
-        if tree_stopped:
-            return
-        try:
-            entries = sorted(dir_path.iterdir(), key=lambda p: (not p.is_dir(), p.name))
-        except PermissionError:
-            skipped_count += 1
-            return
-
-        # Phase A — keep only the entries that are actually listable in the
-        # tree (everything the skip filters below would have dropped is counted
-        # into skipped_count now, so the per-directory cap below counts real
-        # listed entries, not raw children, and the "N more" figure is exact).
-        listable: list[Path] = []
-        for entry in entries:
-            rel_str = str(entry.relative_to(project_dir))
-
-            if _should_exclude(rel_str, all_exclude):
-                skipped_count += 1
-                continue
-
-            # Skip any symlink (file or directory) that points outside the
-            # project — otherwise an external symlinked file is listed in the
-            # tree and consumes a max_files slot, even though its content is
-            # blocked later by the _path_is_inside check before reading.
-            if entry.is_symlink() and not _path_is_inside(project_dir, entry):
-                skipped_count += 1
-                continue
-            # Directory symlinks, even in-project, are not recursed. os.walk
-            # uses followlinks=False so their contents are not scanned;
-            # listing them advertised paths pass 2 cannot open, and a
-            # cycle (sub/loop → project root) exploded the tree (#97).
-            if entry.is_symlink() and entry.is_dir():
-                skipped_count += 1
-                continue
-
-            # A nested git checkout (worktree, submodule, vendored clone) is a
-            # separate project: keep it out of the tree and the file walk.
-            if entry.is_dir() and _is_nested_checkout(entry):
-                skipped_count += 1
-                continue
-
-            if not entry.is_dir():
-                if _is_binary(entry):
-                    skipped_count += 1
-                    continue
-                if _is_sensitive_file(entry) or _symlink_hides_sensitive(
-                    entry, all_exclude
-                ):
-                    skipped_count += 1
-                    continue
-                if not include_tests and is_test_path(rel_str):
-                    skipped_count += 1
-                    continue
-
-            listable.append(entry)
-
-        # Phase B — emit up to max_tree_entries_per_dir listed entries, then a
-        # single "… N more entries not shown" marker. This is the hard tree-size
-        # bound: it is independent of whether the exclude list caught this dir.
-        shown = listable[:max_tree_entries_per_dir]
-        omitted = len(listable) - len(shown)
-        for entry in shown:
-            # Total-lines backstop: stop the whole walk once the tree reaches
-            # its absolute ceiling, regardless of directory count.
-            if len(tree_lines) >= max_tree_lines:
-                tree_stopped = True
-                return
-            # Basename + indent, not the full relative path. Restating
-            # `pkg/sub/deep.py` on every line (on top of indent that already
-            # encodes ancestry) made the 5000-line cap still overflow
-            # max_context on deep monorepos — n8n's tree was ~151k tokens
-            # and zeroed the pass-2 edge budget (#69).
-            if entry.is_dir():
-                tree_lines.append(f"{indent}{entry.name}/")
-                _walk_dir(entry, indent + "  ")
-            else:
-                tree_lines.append(f"{indent}{entry.name}")
-        if omitted:
-            tree_lines.append(
-                f"{indent}… {omitted} more entries not shown "
-                f"(tree capped at {max_tree_entries_per_dir} per directory)"
-            )
-            skipped_count += omitted
-
-    _walk_dir(project_dir)
-    if tree_stopped:
-        tree_lines.append(
-            f"… tree truncated at {max_tree_lines} total lines "
-            "(too many directories to list in full)"
-        )
-    tree = "\n".join(tree_lines)
-
-    # Phase 2: Select and read files for context
-    # Priority ranking: config files first, then package init, then source, then tests
-    file_fragments: list[FileFragment] = []
-    file_count = 0
+    all_files: list[tuple[int, Path]] = []
 
     def _rank_file(rel_path: str) -> int:
         """Lower number = higher priority."""
@@ -355,50 +307,156 @@ def scan_project(
             return 5
         return 8
 
-    # Collect all text files, ranked
-    all_files: list[tuple[int, Path]] = []
-    for root, dirs, files in os.walk(project_dir):
-        # Check if we're still inside the project (handles symlinks)
-        current_root = Path(root)
-        if not _path_is_inside(project_dir, current_root):
-            dirs.clear()
-            continue
-
-        dirs[:] = [
-            d for d in dirs
-            if not _should_exclude(str(Path(root, d).relative_to(project_dir)), all_exclude)
-            # Also exclude symlinks pointing outside project
-            and (not Path(root, d).is_symlink() or _path_is_inside(project_dir, Path(root, d)))
-            # ...and nested git checkouts (mirrors the tree walk above)
-            and not _is_nested_checkout(Path(root, d))
-        ]
-        for fname in files:
-            fpath = Path(root, fname)
-            rel = str(fpath.relative_to(project_dir))
-
-            if _should_exclude(rel, all_exclude):
-                continue
-            # Drop symlinked files that point outside the project BEFORE ranking,
-            # so an escaping symlink never occupies a max_files candidate slot
-            # (it was previously only rejected at read time, after the slice).
-            if fpath.is_symlink() and not _path_is_inside(project_dir, fpath):
+    def _scan_dir(dir_path: Path, indent: str, *, tree_visit: bool) -> None:
+        nonlocal skipped_count, tree_stopped
+        # tree_visit: the old tree walk entered this directory, so its skips
+        # and its tree lines apply. False: only the old file walk saw it.
+        # Stat while the scandir iterator is still open. DirEntry results are
+        # not guaranteed once it closes.
+        rows: list[tuple[bool, str, Path, bool, bool]] = []
+        try:
+            with os.scandir(dir_path) as iterator:
+                for dir_entry in iterator:
+                    try:
+                        is_dir = dir_entry.is_dir()
+                    except OSError:
+                        is_dir = False
+                    try:
+                        is_link = dir_entry.is_symlink()
+                    except OSError:
+                        is_link = False
+                    rows.append(
+                        (not is_dir, dir_entry.name, Path(dir_entry.path), is_dir, is_link)
+                    )
+        except PermissionError:
+            if tree_visit:
                 skipped_count += 1
-                continue
-            if _is_binary(fpath):
-                continue
-            if _is_sensitive_file(fpath) or _symlink_hides_sensitive(
-                fpath, all_exclude
-            ):
-                skipped_count += 1
-                continue
-            if not include_tests and is_test_path(rel):
+            return
+        except OSError:
+            # os.walk swallows scandir errors. The tree walk only caught
+            # PermissionError, so a tree-entered directory still raises.
+            if tree_visit:
+                raise
+            return
+        # Dirs first, then name — same key as Path.iterdir. Names are unique,
+        # so the order does not depend on scandir's unordered yield.
+        rows.sort(key=lambda row: (row[0], row[1]))
+
+        listable: list[tuple[Path, bool]] = []
+        for _files_after_dirs, _name, path, is_dir, is_link in rows:
+            rel_str = str(path.relative_to(project_dir))
+
+            if _should_exclude(rel_str, all_exclude):
+                if tree_visit:
+                    skipped_count += 1
                 continue
 
+            # Skip any symlink (file or directory) that points outside the
+            # project — otherwise an external symlinked file is listed in the
+            # tree and consumes a max_files slot. Checked before any read.
+            if is_link and not _path_is_inside(project_dir, path):
+                if tree_visit:
+                    skipped_count += 1
+                # The file walk counts escaping symlink files again. Escaping
+                # directory symlinks are only counted by the tree walk.
+                if not is_dir:
+                    skipped_count += 1
+                continue
+            # Directory symlinks, even in-project, are not recursed
+            # (followlinks=False). Listing them advertised paths pass 2 cannot
+            # open, and a cycle (sub/loop → project root) exploded the tree
+            # (#97).
+            if is_link and is_dir:
+                if tree_visit:
+                    skipped_count += 1
+                continue
+
+            # A nested git checkout (worktree, submodule, vendored clone) is a
+            # separate project: keep it out of the tree and the file list.
+            if is_dir and _is_nested_checkout(path):
+                if tree_visit:
+                    skipped_count += 1
+                continue
+
+            if not is_dir:
+                if _is_binary(path):
+                    if tree_visit:
+                        skipped_count += 1
+                    continue
+                if _is_sensitive_file(path) or _symlink_hides_sensitive(path, all_exclude):
+                    # Both old walks counted a sensitive file the tree saw.
+                    if tree_visit:
+                        skipped_count += 1
+                    skipped_count += 1
+                    continue
+                if not include_tests and is_test_path(rel_str):
+                    if tree_visit:
+                        skipped_count += 1
+                    continue
+
+            listable.append((path, is_dir))
+
+        pending_dirs: list[Path] = []
+        if tree_visit:
+            shown = listable[:max_tree_entries_per_dir]
+            omitted = listable[max_tree_entries_per_dir:]
+            cursor = 0
+            while cursor < len(shown):
+                # Total-lines backstop: stop the tree once it reaches its
+                # absolute ceiling. File collection below still runs.
+                if len(tree_lines) >= max_tree_lines:
+                    tree_stopped = True
+                    break
+                path, is_dir = shown[cursor]
+                cursor += 1
+                # Basename + indent, not the full relative path. Restating
+                # `pkg/sub/deep.py` on every line (on top of indent that
+                # already encodes ancestry) made the 5000-line cap still
+                # overflow max_context on deep monorepos — n8n's tree was
+                # ~151k tokens and zeroed the pass-2 edge budget (#69).
+                if is_dir:
+                    tree_lines.append(f"{indent}{path.name}/")
+                    _scan_dir(path, indent + "  ", tree_visit=True)
+                else:
+                    tree_lines.append(f"{indent}{path.name}")
+            # The omitted marker is emitted only when the line ceiling did not
+            # return early — including when the ceiling tripped inside the last
+            # shown child and this directory still had an omitted tail.
+            if cursor == len(shown) and omitted:
+                tree_lines.append(
+                    f"{indent}… {len(omitted)} more entries not shown "
+                    f"(tree capped at {max_tree_entries_per_dir} per directory)"
+                )
+                skipped_count += len(omitted)
+            if cursor < len(shown):
+                pending_dirs.extend(path for path, is_dir in shown[cursor:] if is_dir)
+            pending_dirs.extend(path for path, is_dir in omitted if is_dir)
+        else:
+            pending_dirs.extend(path for path, is_dir in listable if is_dir)
+
+        for path, is_dir in listable:
+            if is_dir:
+                continue
+            rel = str(path.relative_to(project_dir))
             try:
-                rank = _rank_file(rel)
-                all_files.append((rank, fpath))
+                all_files.append((_rank_file(rel), path))
             except (OSError, PermissionError):
                 skipped_count += 1
+
+        for child in pending_dirs:
+            _scan_dir(child, indent + "  ", tree_visit=False)
+
+    _scan_dir(project_dir, "  ", tree_visit=True)
+    if tree_stopped:
+        tree_lines.append(
+            f"… tree truncated at {max_tree_lines} total lines "
+            "(too many directories to list in full)"
+        )
+    tree = "\n".join(tree_lines)
+
+    # Priority ranking already stamped each path. Sort, then read.
+    file_fragments: list[FileFragment] = []
+    file_count = 0
 
     # Sort by rank, then by path for determinism
     all_files.sort(key=lambda x: (x[0], str(x[1])))
@@ -420,11 +478,32 @@ def scan_project(
             # Captured before any cut so cycle scoring sees the real size.
             line_count = content.count("\n") + 1
             truncated = False
+            import_cache = None
             if len(content) > max_file_chars:
                 # Prefer the signature skeleton (every symbol) over the head of
                 # the file (the first few). The cap applies only if the skeleton
                 # is *still* over it (bodies already gone) or no renderer exists.
-                skel = skeleton_for(fpath, content.encode("utf-8")) if skeleton else None
+                # Python shares one parse of the raw bytes with import extraction
+                # when those bytes are exactly the text buffer (valid UTF-8, LF).
+                # A mismatch keeps the two parses, so the skeleton stays a
+                # function of the text read and edges stay a function of disk.
+                encoded = content.encode("utf-8")
+                skel = None
+                if skeleton and fpath.suffix.lower() == ".py":
+                    raw = _read_bytes(fpath)
+                    if raw == encoded:
+                        shared = _python_skeleton_and_imports(fpath, raw)
+                        if shared is not None:
+                            skel, carriers = shared
+                            import_cache = (
+                                str(fpath.resolve()),
+                                hashlib.sha256(raw).hexdigest(),
+                                carriers,
+                            )
+                    else:
+                        skel = skeleton_for(fpath, encoded)
+                elif skeleton:
+                    skel = skeleton_for(fpath, encoded)
                 content = skel if skel is not None else content
                 if len(content) > max_file_chars:
                     content = content[:max_file_chars]
@@ -437,7 +516,9 @@ def scan_project(
 
             rel = str(fpath.relative_to(project_dir))
             tokens = estimate_tokens(content)
-            file_fragments.append(FileFragment(rel, content, tokens, line_count))
+            frag = FileFragment(rel, content, tokens, line_count)
+            frag._import_cache = import_cache
+            file_fragments.append(frag)
             file_count += 1
             if truncated:
                 logger.debug("Truncated %s to %d chars", rel, max_file_chars)
