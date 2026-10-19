@@ -43,7 +43,7 @@ jobs:
         run: uv run pytest --cov=graphlm --cov-report=xml --cov-report=term-missing -v
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         if: matrix.python-version == '3.13'
         with:
           files: ./coverage.xml
