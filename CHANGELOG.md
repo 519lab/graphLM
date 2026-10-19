@@ -8,6 +8,7 @@ and this project adheres to Semantic Versioning.
 ## [Unreleased]
 
 ### Infrastructure
+- A `promote` workflow opens the single `develop` → `main` promotion pull request after CI passes on a develop push, and refreshes its commit and file summary on later develop pushes. It uses the shared `ggrace519/.github` workflow.
 - Dependabot now opens weekly dependency PRs for the `uv` lockfile and for
   GitHub Actions (`.github/dependabot.yml`), with minor and patch updates
   grouped into one PR. A new `dependabot-auto-merge` workflow enables squash
