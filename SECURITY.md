@@ -17,7 +17,7 @@ pull requests, or discussions.**
 
 Report privately through GitHub's **Private Vulnerability Reporting**:
 
-1. Go to the **[Security tab](https://github.com/ggrace519/graphLM/security)** of
+1. Go to the **[Security tab](https://github.com/519lab/graphLM/security)** of
    the repository.
 2. Click **"Report a vulnerability"**.
 3. Fill in what you found.
