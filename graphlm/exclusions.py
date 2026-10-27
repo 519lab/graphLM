@@ -1,14 +1,19 @@
 """Path-exclusion patterns and matching — what the scanner skips by name.
 
-The always-excluded set (`_ALWAYS_EXCLUDE`) and the fnmatch-based matcher
-(`_should_exclude`), split out of `scanner.py` (600-line limit). A leaf module:
-imports only stdlib + `freshness.STATE_FILENAME` (the one working-copy name), so
+The always-excluded set (`_ALWAYS_EXCLUDE`) and the matcher (`_should_exclude`),
+split out of `scanner.py` (600-line limit). A leaf module: imports only stdlib
++ `freshness.STATE_FILENAME` (the one working-copy name), so
 `scanner → scan_guards → exclusions → freshness → models` has no cycle.
+
+Exact names (no glob character) are a set lookup. ``fnmatch`` runs only for
+patterns that contain ``*``, ``?``, or ``[``.
 """
 
 from __future__ import annotations
 
 import fnmatch
+import functools
+import os
 from pathlib import Path
 
 from graphlm.freshness import STATE_FILENAME
@@ -81,14 +86,52 @@ _ALWAYS_EXCLUDE = {
 }
 
 
+# Characters that make ``fnmatch`` treat a pattern as a glob. A ``[`` with no
+# closing ``]`` is a literal, but it still takes the fnmatch path so the result
+# stays identical. Anything else is an exact name.
+_GLOB_CHARS = frozenset("*?[")
+
+
+@functools.lru_cache(maxsize=128)
+def _compile_exclude(
+    patterns: tuple[str, ...],
+) -> tuple[frozenset[str], frozenset[str], tuple[str, ...]]:
+    """Split patterns into exact component names, exact full paths, and globs.
+
+    Slash-free exact names match any path component (and a single-component
+    path). A pattern that contains a separator but no glob character matches
+    only the full relative path — ``fnmatch`` does not treat ``/`` as special,
+    so ``src/main.py`` does not exclude the component ``main.py``.
+    """
+    components: list[str] = []
+    paths: list[str] = []
+    globs: list[str] = []
+    for pat in patterns:
+        if any(ch in pat for ch in _GLOB_CHARS):
+            globs.append(pat)
+        elif "/" in pat or "\\" in pat:
+            paths.append(os.path.normcase(pat))
+        else:
+            components.append(os.path.normcase(pat))
+    return frozenset(components), frozenset(paths), tuple(globs)
+
+
 def _should_exclude(rel_path: str, exclude_patterns: tuple[str, ...]) -> bool:
     """Check if a relative path matches any exclusion pattern."""
+    # ``tuple()`` of an existing tuple is the same object, so the cache key is
+    # stable across the thousands of calls in one scan. A list still works.
+    patterns = tuple(exclude_patterns)
+    exact_parts, exact_paths, globs = _compile_exclude(patterns)
+    folded = os.path.normcase(rel_path)
+    if folded in exact_paths or folded in exact_parts:
+        return True
     parts = Path(rel_path).parts
-    for pattern in exclude_patterns:
-        # Match against the full relative path
+    for part in parts:
+        if os.path.normcase(part) in exact_parts:
+            return True
+    for pattern in globs:
         if fnmatch.fnmatch(rel_path, pattern):
             return True
-        # Match against individual path components
         for part in parts:
             if fnmatch.fnmatch(part, pattern):
                 return True
