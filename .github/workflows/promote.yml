@@ -14,8 +14,14 @@ permissions:
   contents: read
   pull-requests: write
 
+# Only push-triggered and manual runs share the group, so a newer one cancels a superseded one.
+# A develop merge also fires lint on the open promotion PR (event pull_request). Its promote run
+# is skipped by the job's `if`, but concurrency applies before `if`, so in a shared group it would
+# cancel the push run that should refresh the PR. Give those runs a group of their own.
 concurrency:
-  group: promote-develop-to-main
+  group: >-
+    ${{ (github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'push')
+        && 'promote-develop-to-main' || format('promote-skip-{0}', github.run_id) }}
   cancel-in-progress: true
 
 jobs:

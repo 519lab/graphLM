@@ -8,6 +8,7 @@ and this project adheres to Semantic Versioning.
 ## [Unreleased]
 
 ### Infrastructure
+- `promote`: a merge into develop reliably refreshes the develop → main promotion PR again. The merge also re-runs lint on the open promotion PR, and that run's promote job is always skipped. Because both runs shared one concurrency group, the skipped run could cancel the push-triggered run that does the work. Now only push-triggered and manual runs share the group (ggrace519/.github#17).
 - The promotion workflow now pins the shared `promote` workflow to a commit SHA (v1.0.2) instead of the moving `v1` tag, so upstream changes can't silently alter what runs in this repo's CI.
 - A `promote` workflow opens the single `develop` → `main` promotion pull request after CI passes on a develop push, and refreshes its commit and file summary on later develop pushes. It uses the shared `ggrace519/.github` workflow.
 - Dependabot now opens weekly dependency PRs for the `uv` lockfile and for
