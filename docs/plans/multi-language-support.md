@@ -1,7 +1,7 @@
 # Plan: Multi-language support (AST parsing beyond Python)
 
 **Status:** Research / recommendation. Not yet approved, not yet built.
-**Tracking issue:** [#42](https://github.com/ggrace519/graphLM/issues/42).
+**Tracking issue:** [#42](https://github.com/519lab/graphLM/issues/42).
 **Implementation plan:** `docs/plans/multi-language-implementation.md`.
 **Repo state at write time:** `main` @ `e5ebf92`.
 **Empirical basis:** all version/ABI/baseline claims below were measured on

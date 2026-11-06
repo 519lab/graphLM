@@ -46,12 +46,12 @@ Want your coding agent to *query* the map over MCP (see [Serve the map to your a
 
 **First run.** The first time you run graphlm interactively it offers a quick setup — pick the optional packs you want (language grammars, the MCP server, TypeSafe prose-scoring) and it installs them with the installer you used. Run it again any time with `graphlm --setup`. It never installs anything without asking, and a piped/CI run skips it with a one-line hint.
 
-**No PyPI, no problem.** Every release also ships the wheel and sdist as [GitHub Release](https://github.com/ggrace519/graphLM/releases/latest) assets. Grab the latest `graphlm-*.whl` from that page and `pipx install` the file (or its URL).
+**No PyPI, no problem.** Every release also ships the wheel and sdist as [GitHub Release](https://github.com/519lab/graphLM/releases/latest) assets. Grab the latest `graphlm-*.whl` from that page and `pipx install` the file (or its URL).
 
 **Hacking on graphLM itself?** Clone it and let `uv` sync the dev deps. Add the extras if you want the MCP and language-pack tests to run rather than skip:
 
 ```bash
-git clone https://github.com/ggrace519/graphLM && cd graphLM
+git clone https://github.com/519lab/graphLM && cd graphLM
 uv sync --group dev --extra mcp --extra all
 uv run graphlm --version
 ```
@@ -482,7 +482,7 @@ Contributions are welcome — bug reports, fixes, docs, and new language support
 
 ## Security
 
-Found a vulnerability? **Please don't open a public issue.** Report it privately via GitHub's [Report a vulnerability](https://github.com/ggrace519/graphLM/security/advisories/new) button — see [SECURITY.md](SECURITY.md) for scope and details. graphLM reads code it didn't write, so its sensitive-file, redaction, symlink, and prompt-injection guards are the surface that matters most.
+Found a vulnerability? **Please don't open a public issue.** Report it privately via GitHub's [Report a vulnerability](https://github.com/519lab/graphLM/security/advisories/new) button — see [SECURITY.md](SECURITY.md) for scope and details. graphLM reads code it didn't write, so its sensitive-file, redaction, symlink, and prompt-injection guards are the surface that matters most.
 
 ## License
 

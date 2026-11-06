@@ -1,7 +1,7 @@
 # Implementation plan: Multi-language AST support
 
 **Status:** Phase 0–3 implemented (JS/TS `graphlm[js]`, Java `graphlm[java]`, Rust `graphlm[rust]`). Further packs only on demand.
-**Tracking issue:** [#42](https://github.com/ggrace519/graphLM/issues/42).
+**Tracking issue:** [#42](https://github.com/519lab/graphLM/issues/42).
 **Design baseline:** `docs/plans/multi-language-support.md` (approved 2026-08-30).
 **Repo state at write time:** `main` @ `e5ebf92`.
 
