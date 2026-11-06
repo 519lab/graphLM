@@ -7,6 +7,8 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-06
+
 ### Added
 - **graphLM can be embedded in apps that own their model access.** `generate_graph(llm=...)` takes a host-supplied backend (`graphlm.LLMBackend` → `graphlm.LLMReply`) for both LLM passes. The host only moves text: graphLM still builds the prompts and validates the reply exactly as it does for its own HTTP client. With a backend, graphLM needs no `GRAPHLM_*` endpoint settings and opens no connections of its own. This is what lets an agent plugin build maps on the agent's existing model and billing.
 - **Instant, free maps: `generate_graph(structure_only=True)`.** Returns the directory tree, Tree-sitter import edges and import cycles in seconds, with no LLM call and no configuration, and writes them when `output_dir` is set. Previously this map existed only as a side effect of `--dry-run`, labelled "DRY RUN".
@@ -14,11 +16,18 @@ and this project adheres to Semantic Versioning.
 
 ### Changed
 - **`import graphlm` no longer reads `~/.config/graphlm/.env`.** Importing the library used to copy graphLM's user config into the importing process's environment, where everything else in that process could see it. The `graphlm` CLI still reads it at startup, as does `generate_graph()` when it uses graphLM's own HTTP client, so CLI behaviour is unchanged. A library caller that read `GRAPHLM_*` from `os.environ` itself after importing graphLM should call `graphlm.config.load_user_env()` first (ADR-017).
+- **Oversized Python files are parsed once.** A file over the per-file character cap was parsed to build its signature skeleton and parsed again to extract imports. When the bytes on disk are the text that skeleton is rendered from, both come from that one Tree-sitter parse. The model still receives the redacted skeleton (skeleton first, then redaction), and import edges still resolve from the raw file. The tree is not kept — only the import carriers, dropped once the dependency graph is built. A newline or encoding mismatch keeps the two parses, so neither result changes.
+- **Scanning a large tree does less work for the same map.** Exact exclude names (built-ins, `--exclude`, `.graphlmignore`) are a set lookup; `fnmatch` runs only for patterns that contain a glob character. The directory tree and the file list come from one `os.scandir` walk. Which files are selected, their order, the tree text, and the symlink / nested-checkout / sensitive-file checks are unchanged.
+- **Startup no longer imports httpx.** `import graphlm`, `graphlm --help`, `--version`, `--dry-run`, and `--serve` do not load the HTTP client (or Rich, which httpx pulls in). httpx loads on the first real LLM call. The output-token ceiling moved to `graphlm.limits` so configuration does not import the client to read an integer; `graphlm.llm.LLM_MAX_OUTPUT_TOKENS` still re-exports it. Redaction and the parsers still load at import.
+- **Package links point at the repository's new home, `519lab/graphLM`.** The project moved to the 519lab GitHub organization; the PyPI project links (Homepage, Repository, Changelog, Issues), the README, CONTRIBUTING, issue templates, release notes and the installed agent skill now link there directly instead of relying on GitHub's redirect from `ggrace519/graphLM`.
 
 ### Fixed
 - **Python imports inside functions, `try:` blocks and `if TYPE_CHECKING:` are now in the map.** The parser read only module-body import statements, so lazy imports (common in CLIs and plugin code) were invisible. The map then understated a file's blast radius: in graphLM itself, `graphlm/__init__.py` showed 3 importers instead of 9, missing `cli.py`. An agent that noticed the gap stopped trusting the map. Every import is now an edge, tagged with when it runs (`ImportEdge.scope`: unset = import time, `"local"` = inside a function, `"typing"` = type-checking only). Import cycles are computed from import-time edges only, because a lazy import is the usual way to *break* a cycle. Imports in top-level `try:` / `if` blocks do run at import time, so cycles that pass through them are now reported where they were hidden before.
 
 ### Infrastructure
+- CI now runs pytest and mypy on pull requests into `develop`, not only on promotion PRs into `main`, so a failing test is caught when its feature merges instead of at release time (#180).
+- The `test-packs` CI job installs the `typesafe` extra, so the evidence- and importance-scoring tests run in CI instead of skipping (#188).
+- A Claude Code review workflow runs on every opened or updated pull request, and a Claude assistant workflow responds when mentioned in issues, PRs and review comments (#226).
 - `promote`: a merge into develop reliably refreshes the develop → main promotion PR again. The merge also re-runs lint on the open promotion PR, and that run's promote job is always skipped. Because both runs shared one concurrency group, the skipped run could cancel the push-triggered run that does the work. Now only push-triggered and manual runs share the group (ggrace519/.github#17).
 - The promotion workflow now pins the shared `promote` workflow to a commit SHA (v1.0.2) instead of the moving `v1` tag, so upstream changes can't silently alter what runs in this repo's CI.
 - A `promote` workflow opens the single `develop` → `main` promotion pull request after CI passes on a develop push, and refreshes its commit and file summary on later develop pushes. It uses the shared `ggrace519/.github` workflow.
@@ -27,12 +36,6 @@ and this project adheres to Semantic Versioning.
   grouped into one PR. A new `dependabot-auto-merge` workflow enables squash
   auto-merge on patch/minor Dependabot PRs once required CI checks pass; major
   updates stay open for manual review.
-
-### Changed
-
-- **Oversized Python files are parsed once.** A file over the per-file character cap was parsed to build its signature skeleton and parsed again to extract imports. When the bytes on disk are the text that skeleton is rendered from, both come from that one Tree-sitter parse. The model still receives the redacted skeleton (skeleton first, then redaction), and import edges still resolve from the raw file. The tree is not kept — only the import carriers, dropped once the dependency graph is built. A newline or encoding mismatch keeps the two parses, so neither result changes.
-- **Scanning a large tree does less work for the same map.** Exact exclude names (built-ins, `--exclude`, `.graphlmignore`) are a set lookup; `fnmatch` runs only for patterns that contain a glob character. The directory tree and the file list come from one `os.scandir` walk. Which files are selected, their order, the tree text, and the symlink / nested-checkout / sensitive-file checks are unchanged.
-- **Startup no longer imports httpx.** `import graphlm`, `graphlm --help`, `--version`, `--dry-run`, and `--serve` do not load the HTTP client (or Rich, which httpx pulls in). httpx loads on the first real LLM call. The output-token ceiling moved to `graphlm.limits` so configuration does not import the client to read an integer; `graphlm.llm.LLM_MAX_OUTPUT_TOKENS` still re-exports it. Redaction and the parsers still load at import.
 
 ## [0.6.0] - 2026-09-23
 
@@ -388,16 +391,17 @@ First public release. graphlm is installable from PyPI (`uv tool install graphlm
 - mypy type checking in CI
 - Removed stale generated artifacts (`graphs.md`, `graphs.json`, `graph.html`) left over from before the `GRAPH.*` output rename, and the committed `.coverage` database; the repo no longer ships tool output. Added `.coverage`, `coverage.xml`, and the `GRAPH.*` output files to `.gitignore` so generated artifacts stay out of version control
 
-[Unreleased]: https://github.com/ggrace519/graphLM/compare/v0.6.0...HEAD
-[0.6.0]: https://github.com/ggrace519/graphLM/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/ggrace519/graphLM/compare/v0.4.2...v0.5.0
-[0.4.2]: https://github.com/ggrace519/graphLM/compare/v0.4.1...v0.4.2
-[0.4.1]: https://github.com/ggrace519/graphLM/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/ggrace519/graphLM/compare/v0.3.1...v0.4.0
-[0.3.1]: https://github.com/ggrace519/graphLM/compare/v0.3.0...v0.3.1
-[0.3.0]: https://github.com/ggrace519/graphLM/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/ggrace519/graphLM/compare/v0.1.3...v0.2.0
-[0.1.3]: https://github.com/ggrace519/graphLM/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/ggrace519/graphLM/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/ggrace519/graphLM/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/ggrace519/graphLM/releases/tag/v0.1.0
+[Unreleased]: https://github.com/519lab/graphLM/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/519lab/graphLM/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/519lab/graphLM/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/519lab/graphLM/compare/v0.4.2...v0.5.0
+[0.4.2]: https://github.com/519lab/graphLM/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/519lab/graphLM/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/519lab/graphLM/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/519lab/graphLM/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/519lab/graphLM/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/519lab/graphLM/compare/v0.1.3...v0.2.0
+[0.1.3]: https://github.com/519lab/graphLM/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/519lab/graphLM/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/519lab/graphLM/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/519lab/graphLM/releases/tag/v0.1.0

@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thanks for the report! Please **do not** use this form for security
-        vulnerabilities — see [SECURITY.md](https://github.com/ggrace519/graphLM/security/policy).
+        vulnerabilities — see [SECURITY.md](https://github.com/519lab/graphLM/security/policy).
   - type: textarea
     id: what-happened
     attributes:

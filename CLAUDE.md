@@ -20,7 +20,7 @@ uv sync --group dev --extra go               # + Go grammar (needed for tests/te
 uv sync --group dev --extra php              # + PHP grammar (needed for tests/test_parser_php.py enabled-path tests; skipped otherwise)
 uv sync --group dev --extra typesafe         # + TypeSafe/Jev SDK (needed for tests/test_evidence.py — real Noul types; skipped otherwise)
 uv sync --group dev --extra all              # every language pack (does NOT include mcp or typesafe)
-uv run pytest -q                             # full suite (~1030 tests, ~6s, no network — LLM is mocked via pytest-httpx; language-pack + typesafe enabled-path tests skip without their extra)
+uv run pytest -q                             # full suite (~1320 tests, ~7s, no network — LLM is mocked via pytest-httpx; language-pack + typesafe enabled-path tests skip without their extra)
 uv run pytest tests/test_parser.py -q        # one file
 uv run pytest tests/test_parser.py::test_name -q   # one test
 uv run pytest --cov=graphlm --cov-report=term-missing   # coverage (CI reports it; ~90%, but NOT gated — no --cov-fail-under)

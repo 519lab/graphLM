@@ -50,7 +50,7 @@ def _skill_markdown_body() -> str:
     return """\
 ## Use graphlm's codebase map
 
-[graphlm](https://github.com/ggrace519/graphLM) generates a **map of a
+[graphlm](https://github.com/519lab/graphLM) generates a **map of a
 codebase** — modules, import/dependency edges, data flow, entry points, import
 cycles, and "where do I find X?" answers. **Read `.graphlm/GRAPH.md`** — the
 Markdown map is what you want as an agent (it opens with a compact orientation
