@@ -7,12 +7,8 @@ from tempfile import TemporaryDirectory
 import pytest
 
 from graphlm.cycles import compute_sloc_map, detect_cycles
-from graphlm.html_render import (
-    _build_links,
-    _build_nodes,
-    _directory_color,
-    render_html,
-)
+from graphlm.html_render import render_html
+from graphlm.view import build_links, build_nodes, directory_color
 from graphlm.models import (
     CodebaseGraph,
     Cycle,
@@ -34,26 +30,26 @@ def _embedded(html: str) -> dict:
 
 class TestDirectoryColor:
     def test_returns_hex_color(self):
-        color = _directory_color("app")
+        color = directory_color("app")
         assert color.startswith("#")
         assert len(color) == 7
 
     def test_deterministic(self):
-        assert _directory_color("app") == _directory_color("app")
+        assert directory_color("app") == directory_color("app")
 
     def test_different_dirs_different_colors(self):
         # Use long, distinct directory names that hash to different colors
-        assert _directory_color("application_directory") != _directory_color("testing_directory")
+        assert directory_color("application_directory") != directory_color("testing_directory")
 
     def test_consistent_across_calls(self):
-        results = [_directory_color("lib") for _ in range(10)]
+        results = [directory_color("lib") for _ in range(10)]
         assert len(set(results)) == 1
 
 
 class TestBuildNodes:
     def test_empty_graph_no_nodes(self):
         graph = CodebaseGraph(directory_tree="root/")
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert nodes == []
 
     def test_modules_become_nodes(self):
@@ -64,7 +60,7 @@ class TestBuildNodes:
                 ModuleDescription(path="app/main.py", name="main", description="Entry point"),
             ],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert len(nodes) == 2
         assert nodes[0]["type"] == "module"
         assert nodes[0]["r"] == 8
@@ -82,7 +78,7 @@ class TestBuildNodes:
                 }
             ],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert len(nodes) == 1
         assert nodes[0]["type"] == "entry_point"
         assert nodes[0]["r"] == 12
@@ -94,7 +90,7 @@ class TestBuildNodes:
                 FileSummary(path="app/main.py", summary="The main module"),
             ],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert len(nodes) == 1
         assert nodes[0]["type"] == "file_summary"
         assert nodes[0]["r"] == 5
@@ -106,7 +102,7 @@ class TestBuildNodes:
             entry_points=[{"path": "b.py", "name": "b", "kind": "main", "description": "b"}],
             file_summaries=[FileSummary(path="c.py", summary="C")],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert len(nodes) == 3
         types = {n["type"] for n in nodes}
         assert types == {"module", "entry_point", "file_summary"}
@@ -116,7 +112,7 @@ class TestBuildNodes:
             directory_tree="root/",
             modules=[ModuleDescription(path="app/main.py", name="A", description="A")],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert nodes[0]["color"].startswith("#")
 
     def test_nodes_have_description(self):
@@ -124,7 +120,7 @@ class TestBuildNodes:
             directory_tree="root/",
             modules=[ModuleDescription(path="a.py", name="A", description="Description text")],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert nodes[0]["description"] == "Description text"
 
     def test_nodes_have_path(self):
@@ -132,7 +128,7 @@ class TestBuildNodes:
             directory_tree="root/",
             modules=[ModuleDescription(path="lib/utils.py", name="utils", description="U")],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert nodes[0]["path"] == "lib/utils.py"
 
     def test_duplicate_path_collapsed_to_one_node(self):
@@ -149,7 +145,7 @@ class TestBuildNodes:
             ],
             file_summaries=[FileSummary(path="app/main.py", summary="The main module")],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert len(nodes) == 1
         assert nodes[0]["type"] == "entry_point"
         assert nodes[0]["r"] == 12
@@ -162,7 +158,7 @@ class TestBuildNodes:
                 ImportEdge(from_path="tests/test_cli.py", to_path="graphlm/cli.py", kind="import"),
             ],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         ids = {n["id"] for n in nodes}
         assert ids == {"tests/test_cli.py", "graphlm/cli.py"}
 
@@ -171,7 +167,7 @@ class TestBuildNodes:
             directory_tree="root/",
             data_flow=[{"source": "CLI (cli.py)", "destination": "Library API", "description": "calls"}],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         ids = {n["id"] for n in nodes}
         assert ids == {"CLI (cli.py)", "Library API"}
 
@@ -184,7 +180,7 @@ class TestBuildLinks:
                 ImportEdge(from_path="app/main.py", to_path="app/routes.py", kind="import"),
             ],
         )
-        links = _build_links(graph)
+        links = build_links(graph)
         assert len(links) == 1
         assert links[0]["type"] == "import"
         assert links[0]["source"] == "app/main.py"
@@ -198,14 +194,14 @@ class TestBuildLinks:
                 {"source": "API", "destination": "DB", "description": "Queries"},
             ],
         )
-        links = _build_links(graph)
+        links = build_links(graph)
         assert len(links) == 1
         assert links[0]["type"] == "data_flow"
         assert links[0]["dash"] == "5,5"
 
     def test_empty_graph_no_links(self):
         graph = CodebaseGraph(directory_tree="root/")
-        links = _build_links(graph)
+        links = build_links(graph)
         assert links == []
 
     def test_multiple_edges(self):
@@ -219,7 +215,7 @@ class TestBuildLinks:
                 {"source": "X", "destination": "Y", "description": "Data"},
             ],
         )
-        links = _build_links(graph)
+        links = build_links(graph)
         assert len(links) == 3
 
 
@@ -541,7 +537,7 @@ class TestGroundTruthLinks:
             directory_tree="root/",
             deterministic_edges=[_edge("a.py", "b.py")],
         )
-        links = _build_links(graph)
+        links = build_links(graph)
         assert len(links) == 1
         assert links[0]["type"] == "ast"
         assert links[0]["source"] == "a.py"
@@ -556,7 +552,7 @@ class TestGroundTruthLinks:
             deterministic_edges=[_edge("a.py", "b.py")],
             import_edges=[_edge("a.py", "b.py", kind="from")],
         )
-        links = _build_links(graph)
+        links = build_links(graph)
         assert len(links) == 1
         assert links[0]["type"] == "ast"
         assert links[0]["corroborated"] is True
@@ -567,7 +563,7 @@ class TestGroundTruthLinks:
             deterministic_edges=[_edge("a.py", "b.py")],
             import_edges=[_edge("a.py", "b.py"), _edge("a.py", "c.py")],
         )
-        links = _build_links(graph)
+        links = build_links(graph)
         by_type = {(l["type"], l["source"], l["target"]) for l in links}
         assert by_type == {("ast", "a.py", "b.py"), ("import", "a.py", "c.py")}
         llm = next(l for l in links if l["type"] == "import")
@@ -580,7 +576,7 @@ class TestGroundTruthLinks:
             deterministic_edges=[_edge("a.py", "b.py")],
             import_edges=[_edge("b.py", "a.py")],
         )
-        links = _build_links(graph)
+        links = build_links(graph)
         assert {l["type"] for l in links} == {"ast", "import"}
         assert next(l for l in links if l["type"] == "ast")["corroborated"] is False
 
@@ -591,7 +587,7 @@ class TestGroundTruthLinks:
             directory_tree="root/",
             deterministic_edges=[_edge("a.py", "b.py"), _edge("a.py", "b.py", kind="from")],
         )
-        assert len(_build_links(graph)) == 1
+        assert len(build_links(graph)) == 1
 
     def test_ast_none_leaves_import_links_unchanged(self):
         graph = CodebaseGraph(
@@ -599,7 +595,7 @@ class TestGroundTruthLinks:
             deterministic_edges=None,
             import_edges=[_edge("a.py", "b.py")],
         )
-        links = _build_links(graph)
+        links = build_links(graph)
         assert len(links) == 1
         assert links[0]["type"] == "import"
 
@@ -609,7 +605,7 @@ class TestGroundTruthLinks:
             deterministic_edges=[_edge("a.py", "b.py")],
             data_flow=[{"source": "a.py", "destination": "b.py", "description": "d"}],
         )
-        links = _build_links(graph)
+        links = build_links(graph)
         assert [l["type"] for l in links] == ["ast", "data_flow"]
 
 
@@ -619,7 +615,7 @@ class TestGroundTruthNodes:
             directory_tree="root/",
             deterministic_edges=[_edge("pkg/a.py", "pkg/b.py")],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert {n["id"] for n in nodes} == {"pkg/a.py", "pkg/b.py"}
         assert all(n["type"] == "file" for n in nodes)
 
@@ -630,7 +626,7 @@ class TestGroundTruthNodes:
             deterministic_edges=[_edge("a.py", "b.py"), _edge("b.py", "a.py"), _edge("a.py", "c.py")],
             import_cycles=[Cycle(nodes=["a.py", "b.py"], edges=[], length=2, risk_score=1.0)],
         )
-        flags = {n["id"]: n["in_cycle"] for n in _build_nodes(graph)}
+        flags = {n["id"]: n["in_cycle"] for n in build_nodes(graph)}
         assert flags == {"a.py": True, "b.py": True, "c.py": False}
 
     def test_is_test_flag_set_from_path(self):
@@ -643,7 +639,7 @@ class TestGroundTruthNodes:
                 FileSummary(path="tests/test_core.py", summary="a test"),
             ],
         )
-        flags = {n["id"]: n["is_test"] for n in _build_nodes(graph)}
+        flags = {n["id"]: n["is_test"] for n in build_nodes(graph)}
         assert flags["tests/test_core.py"] is True
         assert flags["app/core.py"] is False
 
@@ -653,7 +649,7 @@ class TestGroundTruthNodes:
             modules=[ModuleDescription(path="a.py", name="A", description="A")],
             import_edges=[_edge("a.py", "b.py")],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert nodes and all(n["in_cycle"] is False for n in nodes)
 
     def test_existing_module_node_gains_in_cycle_flag(self):
@@ -664,7 +660,7 @@ class TestGroundTruthNodes:
             modules=[ModuleDescription(path="a.py", name="A", description="A")],
             import_cycles=[Cycle(nodes=["a.py", "b.py"], edges=[], length=2, risk_score=1.0)],
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         assert len(nodes) == 1
         assert nodes[0]["type"] == "module"
         assert nodes[0]["in_cycle"] is True
@@ -679,10 +675,10 @@ class TestGroundTruthNodes:
             ],
             deterministic_edges=None,
         )
-        nodes = _build_nodes(graph)
+        nodes = build_nodes(graph)
         flags = {n["id"]: n["in_cycle"] for n in nodes}
         assert flags == {"a.py": True, "b.py": True}
-        links = _build_links(graph)
+        links = build_links(graph)
         assert {(lk["source"], lk["target"]) for lk in links} == {
             ("a.py", "b.py"),
             ("b.py", "a.py"),

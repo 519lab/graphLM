@@ -374,6 +374,11 @@ def main(
     2. LLM produces the graph from tree + selected files
     """
     from graphlm import generate_graph, GraphLLError
+    from graphlm.config import load_user_env
+
+    # The CLI is graphlm's own process, so it reads the user config up front
+    # (the library no longer does this at import time — see config.load_user_env).
+    load_user_env()
 
     # --upgrade short-circuits: no LLM, no scan — bump the install and exit.
     # Flag, not a subcommand, so `graphlm <project>` stays the primary interface

@@ -162,6 +162,35 @@ print(len(result.graph.modules), "modules found")
 
 AST parsing is on by default: graphLM runs Tree-sitter, attaches `graph.deterministic_edges`, passes those edges into the pass-2 prompt as ground truth, and runs cycle detection on the AST edges with SLOC-based risk scores. Pass `ast=False` or `--no-ast` to skip. `include_html=False` skips writing `GRAPH.html` when `output_dir` is set (HTML is on by default).
 
+#### Embedding graphLM in another application
+
+Three pieces let a host (an agent framework, an IDE, a desktop app) use graphLM without handing it credentials:
+
+```python
+from graphlm import LLMReply, generate_graph
+from graphlm.view import graph_view
+
+# 1. Instant, free map: directory tree + Tree-sitter import edges + import
+#    cycles. No LLM call, no endpoint settings, no config file read.
+quick = generate_graph("/path/to/project", structure_only=True)
+
+# 2. Full map through the host's own model access. graphLM builds the
+#    prompts and validates the reply; the host only moves text.
+def my_backend(system_prompt, user_prompt, *, json_schema, schema_name,
+               timeout, max_output_tokens):
+    text, usage = host.chat(system_prompt, user_prompt, schema=json_schema)
+    return LLMReply(text, {"prompt_tokens": usage.input,
+                           "completion_tokens": usage.output})
+
+full = generate_graph("/path/to/project", llm=my_backend,
+                      include_evidence=False, include_importance=False)
+
+# 3. The drawable view any renderer can use — the same data GRAPH.html embeds.
+view = graph_view(full.graph)   # {"nodes": [...], "links": [...], "cycles": n, "provenance": {...}}
+```
+
+With `llm=` or `structure_only=True`, graphLM never resolves `GRAPHLM_*` endpoint settings and never reads `~/.config/graphlm/.env`. `import graphlm` itself never reads that file; only the `graphlm` CLI and a `generate_graph()` call that uses graphLM's own HTTP client do.
+
 ## How it works
 
 graphLM uses a **two-pass LLM strategy** to stay within context windows while still producing comprehensive graphs:
