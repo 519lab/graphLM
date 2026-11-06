@@ -85,6 +85,9 @@ class _ParsedImport:
     names: tuple[str, ...]
     level: int
     kind: str
+    # Where the statement runs: "module" (import time), "local" (inside a
+    # function — a lazy import) or "typing" (under ``if TYPE_CHECKING:``).
+    scope: str = "module"
 
 
 # --- Grammar registry ------------------------------------------------------
@@ -428,14 +431,19 @@ def parse_file(path: Path, language: str | None = None) -> ParsedFile | None:
 
 
 def _dedupe_edges(edges: list[ImportEdge]) -> list[ImportEdge]:
-    seen: set[tuple[str, str, str]] = set()
-    unique: list[ImportEdge] = []
+    """One edge per ``(from, to, kind)``, first-seen order.
+
+    When the same pair is imported both at module level and lazily, the
+    module-level (``scope=None``) edge wins: it is the one that runs at import
+    time, so it is the one that can take part in an import cycle.
+    """
+    unique: dict[tuple[str, str, str], ImportEdge] = {}
     for edge in edges:
         key = (edge.from_path, edge.to_path, edge.kind)
-        if key not in seen:
-            seen.add(key)
-            unique.append(edge)
-    return unique
+        kept = unique.get(key)
+        if kept is None or (kept.scope is not None and edge.scope is None):
+            unique[key] = edge
+    return list(unique.values())
 
 
 def _cached_python_imports(
@@ -530,12 +538,14 @@ def build_dependency_graph(
                 ):
                     # Policy drop (bare/aliased specifier), not a missed file.
                     partial_languages.add(language)
+                scope = getattr(imp, "scope", "module")
                 for to_path in targets:
                     all_edges.append(
                         ImportEdge(
                             from_path=rel_path,
                             to_path=to_path,
                             kind=resolver.edge_kind(imp),
+                            scope=None if scope == "module" else scope,
                         )
                     )
         except _GrammarUnavailable as e:
@@ -550,6 +560,10 @@ def build_dependency_graph(
 def detect_import_cycles(edges: list[ImportEdge]) -> list[list[str]]:
     """Detect import cycles from dependency edges using Tarjan's algorithm.
 
+    Only import-time edges count (``scope`` unset); lazy and
+    ``TYPE_CHECKING``-only imports cannot form an import cycle — the same rule
+    as :func:`graphlm.cycles.detect_cycles`.
+
     Args:
         edges: List of ImportEdge instances.
 
@@ -558,7 +572,8 @@ def detect_import_cycles(edges: list[ImportEdge]) -> list[list[str]]:
     """
     graph: dict[str, set[str]] = {}
     for edge in edges:
-        graph.setdefault(edge.from_path, set()).add(edge.to_path)
+        if edge.scope is None:
+            graph.setdefault(edge.from_path, set()).add(edge.to_path)
 
     index_counter = [0]
     stack: list[str] = []

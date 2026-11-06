@@ -111,7 +111,9 @@ def detect_cycles(
     """Detect import cycles in a set of edges using Tarjan's SCC algorithm.
 
     Self-loops (single-node SCCs) are excluded -- only cycles with length > 1
-    are reported.
+    are reported. Only import-time edges count: a function-local (lazy) import
+    or a ``TYPE_CHECKING``-only import (``scope`` set) cannot take part in an
+    import cycle — lazy imports are the usual way to *break* one.
 
     Args:
         edges: List of import/dependency edges.
@@ -120,9 +122,6 @@ def detect_cycles(
     Returns:
         List of Cycle objects sorted by risk_score descending.
     """
-    if not edges:
-        return []
-
     edges = [
         ImportEdge(
             from_path=_norm_path(e.from_path),
@@ -130,7 +129,10 @@ def detect_cycles(
             kind=e.kind,
         )
         for e in edges
+        if e.scope is None
     ]
+    if not edges:
+        return []
     if sloc_map is not None:
         sloc_map = {_norm_path(k): v for k, v in sloc_map.items()}
 
