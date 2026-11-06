@@ -8,7 +8,7 @@ invariants that must not be weakened.
 ## TL;DR
 
 ```bash
-git clone https://github.com/ggrace519/graphLM && cd graphLM
+git clone https://github.com/519lab/graphLM && cd graphLM
 uv sync --group dev --extra mcp --extra all   # deps + pytest + MCP SDK + language-pack grammars
 uv run pytest -q                              # full suite — no network, the LLM is mocked
 uv run mypy graphlm --ignore-missing-imports

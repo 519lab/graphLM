@@ -14,6 +14,7 @@ and this project adheres to Semantic Versioning.
 
 ### Changed
 - **`import graphlm` no longer reads `~/.config/graphlm/.env`.** Importing the library used to copy graphLM's user config into the importing process's environment, where everything else in that process could see it. The `graphlm` CLI still reads it at startup, as does `generate_graph()` when it uses graphLM's own HTTP client, so CLI behaviour is unchanged. A library caller that read `GRAPHLM_*` from `os.environ` itself after importing graphLM should call `graphlm.config.load_user_env()` first (ADR-017).
+- **Package links point at the repository's new home, `519lab/graphLM`.** The project moved to the 519lab GitHub organization; the PyPI project links (Homepage, Repository, Changelog, Issues), the README, CONTRIBUTING, issue templates, release notes and the installed agent skill now link there directly instead of relying on GitHub's redirect from `ggrace519/graphLM`.
 
 ### Fixed
 - **Python imports inside functions, `try:` blocks and `if TYPE_CHECKING:` are now in the map.** The parser read only module-body import statements, so lazy imports (common in CLIs and plugin code) were invisible. The map then understated a file's blast radius: in graphLM itself, `graphlm/__init__.py` showed 3 importers instead of 9, missing `cli.py`. An agent that noticed the gap stopped trusting the map. Every import is now an edge, tagged with when it runs (`ImportEdge.scope`: unset = import time, `"local"` = inside a function, `"typing"` = type-checking only). Import cycles are computed from import-time edges only, because a lazy import is the usual way to *break* a cycle. Imports in top-level `try:` / `if` blocks do run at import time, so cycles that pass through them are now reported where they were hidden before.
@@ -388,16 +389,16 @@ First public release. graphlm is installable from PyPI (`uv tool install graphlm
 - mypy type checking in CI
 - Removed stale generated artifacts (`graphs.md`, `graphs.json`, `graph.html`) left over from before the `GRAPH.*` output rename, and the committed `.coverage` database; the repo no longer ships tool output. Added `.coverage`, `coverage.xml`, and the `GRAPH.*` output files to `.gitignore` so generated artifacts stay out of version control
 
-[Unreleased]: https://github.com/ggrace519/graphLM/compare/v0.6.0...HEAD
-[0.6.0]: https://github.com/ggrace519/graphLM/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/ggrace519/graphLM/compare/v0.4.2...v0.5.0
-[0.4.2]: https://github.com/ggrace519/graphLM/compare/v0.4.1...v0.4.2
-[0.4.1]: https://github.com/ggrace519/graphLM/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/ggrace519/graphLM/compare/v0.3.1...v0.4.0
-[0.3.1]: https://github.com/ggrace519/graphLM/compare/v0.3.0...v0.3.1
-[0.3.0]: https://github.com/ggrace519/graphLM/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/ggrace519/graphLM/compare/v0.1.3...v0.2.0
-[0.1.3]: https://github.com/ggrace519/graphLM/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/ggrace519/graphLM/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/ggrace519/graphLM/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/ggrace519/graphLM/releases/tag/v0.1.0
+[Unreleased]: https://github.com/519lab/graphLM/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/519lab/graphLM/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/519lab/graphLM/compare/v0.4.2...v0.5.0
+[0.4.2]: https://github.com/519lab/graphLM/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/519lab/graphLM/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/519lab/graphLM/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/519lab/graphLM/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/519lab/graphLM/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/519lab/graphLM/compare/v0.1.3...v0.2.0
+[0.1.3]: https://github.com/519lab/graphLM/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/519lab/graphLM/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/519lab/graphLM/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/519lab/graphLM/releases/tag/v0.1.0

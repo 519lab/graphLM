@@ -28,4 +28,4 @@ body:
         **Adding language support?** The Tree-sitter parser fully implements
         Python today; JS/TS are stubs. That's a well-scoped contribution — see
         the "Adding language support" section in
-        [CONTRIBUTING.md](https://github.com/ggrace519/graphLM/blob/main/CONTRIBUTING.md).
+        [CONTRIBUTING.md](https://github.com/519lab/graphLM/blob/main/CONTRIBUTING.md).

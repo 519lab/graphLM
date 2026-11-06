@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: 🔒 Report a security vulnerability
-    url: https://github.com/ggrace519/graphLM/security/advisories/new
+    url: https://github.com/519lab/graphLM/security/advisories/new
     about: Do not open a public issue for security problems — report privately here.

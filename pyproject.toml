@@ -78,10 +78,10 @@ typesafe = ["typesafe-sdk>=0.7,<0.8"]
 all = ["graphlm[js]", "graphlm[java]", "graphlm[rust]", "graphlm[csharp]", "graphlm[cpp]", "graphlm[go]", "graphlm[php]"]
 
 [project.urls]
-Homepage = "https://github.com/ggrace519/graphLM"
-Repository = "https://github.com/ggrace519/graphLM"
-Changelog = "https://github.com/ggrace519/graphLM/blob/main/CHANGELOG.md"
-Issues = "https://github.com/ggrace519/graphLM/issues"
+Homepage = "https://github.com/519lab/graphLM"
+Repository = "https://github.com/519lab/graphLM"
+Changelog = "https://github.com/519lab/graphLM/blob/main/CHANGELOG.md"
+Issues = "https://github.com/519lab/graphLM/issues"
 
 [project.scripts]
 graphlm = "graphlm.cli:app"
@@ -129,6 +129,6 @@ replace = """## [Unreleased]
 # new version's own compare link, in one replacement (order-independent).
 [[tool.bumpversion.files]]
 filename = "CHANGELOG.md"
-search = "[Unreleased]: https://github.com/ggrace519/graphLM/compare/v{current_version}...HEAD"
-replace = """[Unreleased]: https://github.com/ggrace519/graphLM/compare/v{new_version}...HEAD
-[{new_version}]: https://github.com/ggrace519/graphLM/compare/v{current_version}...v{new_version}"""
+search = "[Unreleased]: https://github.com/519lab/graphLM/compare/v{current_version}...HEAD"
+replace = """[Unreleased]: https://github.com/519lab/graphLM/compare/v{new_version}...HEAD
+[{new_version}]: https://github.com/519lab/graphLM/compare/v{current_version}...v{new_version}"""
