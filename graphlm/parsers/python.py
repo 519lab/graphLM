@@ -117,15 +117,54 @@ def _parse_import_node(node) -> list[_ParsedImport]:
     return [_ParsedImport(module=module, names=names, level=level, kind="from")]
 
 
-def _parse_python_imports(tree) -> list[_ParsedImport]:
-    """Extract import statements from a Python AST tree.
+def _import_scope(node) -> str:
+    """When an import statement runs: ``module``, ``local`` or ``typing``.
 
-    Only top-level (module-body) statements are considered.
+    Walks up from the statement to the innermost enclosing construct that
+    decides it: a function body makes it a lazy ``local`` import (it runs on
+    call, so it cannot form an import-time cycle); the *consequence* block of
+    ``if TYPE_CHECKING:`` makes it ``typing`` (never runs). Anything else —
+    module body, class body, top-level ``try:`` / ``if`` / ``with`` — runs at
+    import time (``module``). The ``else`` of a ``TYPE_CHECKING`` test runs at
+    import time, so only the consequence counts.
+    """
+    prev, parent = node, node.parent
+    while parent is not None:
+        if parent.type in ("function_definition", "lambda"):
+            return "local"
+        if parent.type == "if_statement" and prev == parent.child_by_field_name("consequence"):
+            cond = parent.child_by_field_name("condition")
+            if cond is not None and _node_text(cond).split(".")[-1] == "TYPE_CHECKING":
+                return "typing"
+        prev, parent = parent, parent.parent
+    return "module"
+
+
+def _parse_python_imports(tree) -> list[_ParsedImport]:
+    """Extract every import statement from a Python AST tree, with its scope.
+
+    Imports at any depth count — a function-local (lazy) import is still a
+    dependency, and missing it understates a file's blast radius. Each carries
+    its ``scope`` (see :func:`_import_scope`) so cycle detection can keep only
+    the ones that run at import time.
     """
     imports: list[_ParsedImport] = []
-    for node in tree.root_node.children:
+    stack = [tree.root_node]
+    found = []
+    while stack:
+        node = stack.pop()
         if node.type in _IMPORT_NODE_TYPES:
-            imports.extend(_parse_import_node(node))
+            found.append(node)
+            continue
+        stack.extend(node.children)
+    for node in sorted(found, key=lambda n: n.start_byte):
+        scope = _import_scope(node)
+        imports.extend(
+            imp if scope == "module" else _ParsedImport(
+                module=imp.module, names=imp.names, level=imp.level, kind=imp.kind,
+                scope=scope)
+            for imp in _parse_import_node(node)
+        )
     return imports
 
 

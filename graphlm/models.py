@@ -19,6 +19,15 @@ class ImportEdge(BaseModel):
             "'include', or 'uses'"
         )
     )
+    # Set by the parser, never asked of the LLM: None means the import runs at
+    # import time (module level); "local" = inside a function (lazy import);
+    # "typing" = under `if TYPE_CHECKING:`. Only import-time edges can form an
+    # import cycle, so detect_cycles ignores the other two. Optional and None
+    # by default, so older maps and LLM-emitted edges validate unchanged.
+    scope: Optional[str] = Field(
+        default=None,
+        description="Leave null. Filled locally by the parser.",
+    )
 
 
 class ModuleDescription(BaseModel):

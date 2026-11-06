@@ -7,6 +7,17 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- **graphLM can be embedded in apps that own their model access.** `generate_graph(llm=...)` takes a host-supplied backend (`graphlm.LLMBackend` → `graphlm.LLMReply`) for both LLM passes. The host only moves text: graphLM still builds the prompts and validates the reply exactly as it does for its own HTTP client. With a backend, graphLM needs no `GRAPHLM_*` endpoint settings and opens no connections of its own. This is what lets an agent plugin build maps on the agent's existing model and billing.
+- **Instant, free maps: `generate_graph(structure_only=True)`.** Returns the directory tree, Tree-sitter import edges and import cycles in seconds, with no LLM call and no configuration, and writes them when `output_dir` is set. Previously this map existed only as a side effect of `--dry-run`, labelled "DRY RUN".
+- **`graphlm.view.graph_view(graph)`** returns the drawable `{nodes, links, cycles, provenance}` view, the same data GRAPH.html embeds, so other UIs can draw the identical map.
+
+### Changed
+- **`import graphlm` no longer reads `~/.config/graphlm/.env`.** Importing the library used to copy graphLM's user config into the importing process's environment, where everything else in that process could see it. The `graphlm` CLI still reads it at startup, as does `generate_graph()` when it uses graphLM's own HTTP client, so CLI behaviour is unchanged. A library caller that read `GRAPHLM_*` from `os.environ` itself after importing graphLM should call `graphlm.config.load_user_env()` first (ADR-017).
+
+### Fixed
+- **Python imports inside functions, `try:` blocks and `if TYPE_CHECKING:` are now in the map.** The parser read only module-body import statements, so lazy imports (common in CLIs and plugin code) were invisible. The map then understated a file's blast radius: in graphLM itself, `graphlm/__init__.py` showed 3 importers instead of 9, missing `cli.py`. An agent that noticed the gap stopped trusting the map. Every import is now an edge, tagged with when it runs (`ImportEdge.scope`: unset = import time, `"local"` = inside a function, `"typing"` = type-checking only). Import cycles are computed from import-time edges only, because a lazy import is the usual way to *break* a cycle. Imports in top-level `try:` / `if` blocks do run at import time, so cycles that pass through them are now reported where they were hidden before.
+
 ### Infrastructure
 - `promote`: a merge into develop reliably refreshes the develop → main promotion PR again. The merge also re-runs lint on the open promotion PR, and that run's promote job is always skipped. Because both runs shared one concurrency group, the skipped run could cancel the push-triggered run that does the work. Now only push-triggered and manual runs share the group (ggrace519/.github#17).
 - The promotion workflow now pins the shared `promote` workflow to a commit SHA (v1.0.2) instead of the moving `v1` tag, so upstream changes can't silently alter what runs in this repo's CI.

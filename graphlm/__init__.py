@@ -15,11 +15,13 @@ Usage as a CLI:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import Callable, cast
 
 import logging
 
-from graphlm.config import Settings
+from graphlm.backend import LLMBackend, LLMReply
+from graphlm.backend import complete as complete_with_backend
+from graphlm.config import Settings, load_user_env
 from graphlm.context import (
     Pass2Context,
     assemble_pass1_prompt,
@@ -40,7 +42,6 @@ from graphlm.llm import (
     call_llm,
 )
 from graphlm.models import (
-    ArchitectureNote,
     ImportEdge,
     RunUsage,
 )
@@ -48,6 +49,15 @@ from graphlm.parser import build_dependency_graph
 from graphlm.prompts import SYSTEM_PROMPT
 from graphlm.render import WriteResult, write_outputs
 from graphlm.scanner import ScanResult, scan_project
+from graphlm.structure import structure_graph
+
+__all__ = [
+    "GraphResult",
+    "LLMBackend",
+    "LLMReply",
+    "generate_graph",
+    "pass1_tokens",
+]
 
 
 class GraphResult:
@@ -110,6 +120,8 @@ def generate_graph(
     include_evidence: bool = True,
     include_importance: bool = True,
     skeleton: bool = True,
+    llm: LLMBackend | None = None,
+    structure_only: bool = False,
 ) -> GraphResult:
     """Generate a codebase graph for a project directory.
 
@@ -175,6 +187,15 @@ def generate_graph(
             graphlm[typesafe] extra is installed. NOT gated on redaction (it sends
             descriptions + a degree count, never source). Pass False /
             --no-importance to skip.
+        llm: A host-supplied :class:`graphlm.backend.LLMBackend` that performs
+            both passes instead of graphlm's HTTP client. When set,
+            base_url/api_key/model and ``GRAPHLM_*`` endpoint settings are not
+            used and ``~/.config/graphlm/.env`` is never read; parsing and
+            validation are unchanged.
+        structure_only: If True, return the deterministic map only — directory
+            tree, AST import edges and import cycles — with no LLM call, no
+            endpoint configuration and no user config read. Writes when
+            ``output_dir`` is set.
 
     Returns:
         GraphResult with the graph and output metadata.
@@ -183,6 +204,12 @@ def generate_graph(
         ValueError: If configuration is invalid.
         GraphLLError: If the LLM call fails.
     """
+    # graphlm's own user config (~/.config/graphlm/.env) is read only when
+    # graphlm owns the model call. A host-injected backend or a structure-only
+    # map must never pull that file into the host process's environment.
+    if llm is None and not structure_only:
+        load_user_env()
+
     project_path = Path(project_dir).resolve()
 
     if not project_path.exists():
@@ -211,8 +238,9 @@ def generate_graph(
             os.environ.get("GRAPHLM_MAX_OUTPUT_TOKENS", str(LLM_MAX_OUTPUT_TOKENS))
         )
 
-    # Resolve configuration (not needed for dry run)
-    if dry_run:
+    # Resolve configuration — not needed without an LLM call, nor when the host
+    # injected its own backend (it owns the endpoint and its credentials).
+    if dry_run or structure_only or llm is not None:
         settings = None
     elif base_url or api_key or model:
         if not base_url or not api_key or not model:
@@ -277,25 +305,15 @@ def generate_graph(
             deterministic_edges=deterministic_edges,
             edges_partial=bool(partial_languages),
         )
-        graph = CodebaseGraph(
-            directory_tree=scan.tree,
-            architecture_notes=[
-                ArchitectureNote(
-                    note=f"DRY RUN: {len(scan.file_fragments)} files scanned, "
-                    f"{len(pass2_files)} files selected for analysis, "
-                    f"{pass2_tokens} estimated pass-2 tokens"
-                ),
+        graph = structure_graph(
+            scan.tree, deterministic_edges, sloc_map,
+            show_cycles=show_cycles, cycle_threshold=cycle_threshold,
+            notes=[
+                f"DRY RUN: {len(scan.file_fragments)} files scanned, "
+                f"{len(pass2_files)} files selected for analysis, "
+                f"{pass2_tokens} estimated pass-2 tokens"
             ],
-            deterministic_edges=deterministic_edges,
         )
-        if show_cycles:
-            graph.import_cycles = [
-                c
-                for c in detect_cycles(
-                    deterministic_edges or [], sloc_map=sloc_map
-                )
-                if c.risk_score >= cycle_threshold
-            ]
         # Stamp the dry-run graph too, so its provenance is consistent with a
         # real run (a --dry-run write would otherwise carry no directive).
         graph.meta = build_meta(project_path)
@@ -306,8 +324,49 @@ def generate_graph(
             files_analyzed=len(pass2_files),
         )
 
+    if structure_only:
+        # The free, instant map: tree + AST edges + cycles, no LLM, no prompt
+        # assembly. Unlike a dry run it is a real map, so it writes when asked.
+        graph = structure_graph(
+            scan.tree, deterministic_edges, sloc_map,
+            show_cycles=show_cycles, cycle_threshold=cycle_threshold,
+        )
+        graph.meta = build_meta(project_path)
+        if output_dir is not None:
+            write_outputs(graph, Path(output_dir), html=include_html, diff=include_diff)
+        return GraphResult(
+            graph=graph, pass1_context_tokens=0, pass2_context_tokens=0,
+            files_analyzed=0,
+        )
+
+    def _ask(
+        user_prompt: str,
+        *,
+        response_format: type[CodebaseGraph] | None = None,
+        on_usage: Callable[[dict[str, object]], None],
+    ) -> CodebaseGraph | str:
+        # One request through whichever transport this run uses: the host's
+        # backend when one was injected, else graphlm's own HTTP client.
+        if llm is not None:
+            return complete_with_backend(
+                llm, SYSTEM_PROMPT, user_prompt,
+                response_format=response_format, timeout=resolved_timeout,
+                max_output_tokens=cast(int, max_output_tokens), on_usage=on_usage,
+            )
+        assert settings is not None
+        return call_llm(
+            base_url=settings.base_url,
+            api_key=settings.api_key,
+            model=settings.model,
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            response_format=response_format,
+            timeout=resolved_timeout,
+            max_output_tokens=cast(int, max_output_tokens),
+            on_usage=on_usage,
+        )
+
     # Phase 1: LLM identifies key files from tree only
-    assert settings is not None
 
     # Real token accounting per pass, when the endpoint reports it (innovation
     # #6). Captured via call_llm's on_usage callback so the return contract is
@@ -315,15 +374,8 @@ def generate_graph(
     usage_seen: dict[str, dict[str, object] | None] = {"pass1": None, "pass2": None}
 
     pass1_prompt = assemble_pass1_prompt(scan.tree)
-    pass1_result_json = call_llm(
-        base_url=settings.base_url,
-        api_key=settings.api_key,
-        model=settings.model,
-        system_prompt=SYSTEM_PROMPT,
-        user_prompt=pass1_prompt,
-        timeout=resolved_timeout,
-        max_output_tokens=max_output_tokens,
-        on_usage=lambda u: usage_seen.__setitem__("pass1", u),
+    pass1_result_json = _ask(
+        pass1_prompt, on_usage=lambda u: usage_seen.__setitem__("pass1", u)
     )
     pass1_result_json = cast(str, pass1_result_json)
 
@@ -356,16 +408,9 @@ def generate_graph(
     )
 
     # Phase 2: LLM produces the final graph
-    assert settings is not None
-    graph_result = call_llm(
-        base_url=settings.base_url,
-        api_key=settings.api_key,
-        model=settings.model,
-        system_prompt=SYSTEM_PROMPT,
-        user_prompt=pass2_prompt,
+    graph_result = _ask(
+        pass2_prompt,
         response_format=CodebaseGraph,
-        timeout=resolved_timeout,
-        max_output_tokens=max_output_tokens,
         on_usage=lambda u: usage_seen.__setitem__("pass2", u),
     )
     graph = cast(CodebaseGraph, graph_result)
