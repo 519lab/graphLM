@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "graphlm"
-version = "0.6.0"
+version = "0.7.0"
 description = "Generate codebase graphs (Markdown + JSON + interactive HTML) from any project directory using an OpenAI-compatible LLM"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -111,7 +111,7 @@ packages = ["graphlm"]
 # creates and pushes the publishing tag. See CONTRIBUTING.md for the full flow.
 # NOTE: keep current_version in step with project.version above.
 [tool.bumpversion]
-current_version = "0.6.0"
+current_version = "0.7.0"
 commit = false
 tag = false
 allow_dirty = false

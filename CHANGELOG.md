@@ -7,6 +7,8 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-06
+
 ### Added
 - **graphLM can be embedded in apps that own their model access.** `generate_graph(llm=...)` takes a host-supplied backend (`graphlm.LLMBackend` → `graphlm.LLMReply`) for both LLM passes. The host only moves text: graphLM still builds the prompts and validates the reply exactly as it does for its own HTTP client. With a backend, graphLM needs no `GRAPHLM_*` endpoint settings and opens no connections of its own. This is what lets an agent plugin build maps on the agent's existing model and billing.
 - **Instant, free maps: `generate_graph(structure_only=True)`.** Returns the directory tree, Tree-sitter import edges and import cycles in seconds, with no LLM call and no configuration, and writes them when `output_dir` is set. Previously this map existed only as a side effect of `--dry-run`, labelled "DRY RUN".
@@ -389,7 +391,8 @@ First public release. graphlm is installable from PyPI (`uv tool install graphlm
 - mypy type checking in CI
 - Removed stale generated artifacts (`graphs.md`, `graphs.json`, `graph.html`) left over from before the `GRAPH.*` output rename, and the committed `.coverage` database; the repo no longer ships tool output. Added `.coverage`, `coverage.xml`, and the `GRAPH.*` output files to `.gitignore` so generated artifacts stay out of version control
 
-[Unreleased]: https://github.com/519lab/graphLM/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/519lab/graphLM/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/519lab/graphLM/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/519lab/graphLM/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/519lab/graphLM/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/519lab/graphLM/compare/v0.4.1...v0.4.2
