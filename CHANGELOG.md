@@ -14,12 +14,18 @@ and this project adheres to Semantic Versioning.
 
 ### Changed
 - **`import graphlm` no longer reads `~/.config/graphlm/.env`.** Importing the library used to copy graphLM's user config into the importing process's environment, where everything else in that process could see it. The `graphlm` CLI still reads it at startup, as does `generate_graph()` when it uses graphLM's own HTTP client, so CLI behaviour is unchanged. A library caller that read `GRAPHLM_*` from `os.environ` itself after importing graphLM should call `graphlm.config.load_user_env()` first (ADR-017).
+- **Oversized Python files are parsed once.** A file over the per-file character cap was parsed to build its signature skeleton and parsed again to extract imports. When the bytes on disk are the text that skeleton is rendered from, both come from that one Tree-sitter parse. The model still receives the redacted skeleton (skeleton first, then redaction), and import edges still resolve from the raw file. The tree is not kept — only the import carriers, dropped once the dependency graph is built. A newline or encoding mismatch keeps the two parses, so neither result changes.
+- **Scanning a large tree does less work for the same map.** Exact exclude names (built-ins, `--exclude`, `.graphlmignore`) are a set lookup; `fnmatch` runs only for patterns that contain a glob character. The directory tree and the file list come from one `os.scandir` walk. Which files are selected, their order, the tree text, and the symlink / nested-checkout / sensitive-file checks are unchanged.
+- **Startup no longer imports httpx.** `import graphlm`, `graphlm --help`, `--version`, `--dry-run`, and `--serve` do not load the HTTP client (or Rich, which httpx pulls in). httpx loads on the first real LLM call. The output-token ceiling moved to `graphlm.limits` so configuration does not import the client to read an integer; `graphlm.llm.LLM_MAX_OUTPUT_TOKENS` still re-exports it. Redaction and the parsers still load at import.
 - **Package links point at the repository's new home, `519lab/graphLM`.** The project moved to the 519lab GitHub organization; the PyPI project links (Homepage, Repository, Changelog, Issues), the README, CONTRIBUTING, issue templates, release notes and the installed agent skill now link there directly instead of relying on GitHub's redirect from `ggrace519/graphLM`.
 
 ### Fixed
 - **Python imports inside functions, `try:` blocks and `if TYPE_CHECKING:` are now in the map.** The parser read only module-body import statements, so lazy imports (common in CLIs and plugin code) were invisible. The map then understated a file's blast radius: in graphLM itself, `graphlm/__init__.py` showed 3 importers instead of 9, missing `cli.py`. An agent that noticed the gap stopped trusting the map. Every import is now an edge, tagged with when it runs (`ImportEdge.scope`: unset = import time, `"local"` = inside a function, `"typing"` = type-checking only). Import cycles are computed from import-time edges only, because a lazy import is the usual way to *break* a cycle. Imports in top-level `try:` / `if` blocks do run at import time, so cycles that pass through them are now reported where they were hidden before.
 
 ### Infrastructure
+- CI now runs pytest and mypy on pull requests into `develop`, not only on promotion PRs into `main`, so a failing test is caught when its feature merges instead of at release time (#180).
+- The `test-packs` CI job installs the `typesafe` extra, so the evidence- and importance-scoring tests run in CI instead of skipping (#188).
+- A Claude Code review workflow runs on every opened or updated pull request, and a Claude assistant workflow responds when mentioned in issues, PRs and review comments (#226).
 - `promote`: a merge into develop reliably refreshes the develop → main promotion PR again. The merge also re-runs lint on the open promotion PR, and that run's promote job is always skipped. Because both runs shared one concurrency group, the skipped run could cancel the push-triggered run that does the work. Now only push-triggered and manual runs share the group (ggrace519/.github#17).
 - The promotion workflow now pins the shared `promote` workflow to a commit SHA (v1.0.2) instead of the moving `v1` tag, so upstream changes can't silently alter what runs in this repo's CI.
 - A `promote` workflow opens the single `develop` → `main` promotion pull request after CI passes on a develop push, and refreshes its commit and file summary on later develop pushes. It uses the shared `ggrace519/.github` workflow.
@@ -28,12 +34,6 @@ and this project adheres to Semantic Versioning.
   grouped into one PR. A new `dependabot-auto-merge` workflow enables squash
   auto-merge on patch/minor Dependabot PRs once required CI checks pass; major
   updates stay open for manual review.
-
-### Changed
-
-- **Oversized Python files are parsed once.** A file over the per-file character cap was parsed to build its signature skeleton and parsed again to extract imports. When the bytes on disk are the text that skeleton is rendered from, both come from that one Tree-sitter parse. The model still receives the redacted skeleton (skeleton first, then redaction), and import edges still resolve from the raw file. The tree is not kept — only the import carriers, dropped once the dependency graph is built. A newline or encoding mismatch keeps the two parses, so neither result changes.
-- **Scanning a large tree does less work for the same map.** Exact exclude names (built-ins, `--exclude`, `.graphlmignore`) are a set lookup; `fnmatch` runs only for patterns that contain a glob character. The directory tree and the file list come from one `os.scandir` walk. Which files are selected, their order, the tree text, and the symlink / nested-checkout / sensitive-file checks are unchanged.
-- **Startup no longer imports httpx.** `import graphlm`, `graphlm --help`, `--version`, `--dry-run`, and `--serve` do not load the HTTP client (or Rich, which httpx pulls in). httpx loads on the first real LLM call. The output-token ceiling moved to `graphlm.limits` so configuration does not import the client to read an integer; `graphlm.llm.LLM_MAX_OUTPUT_TOKENS` still re-exports it. Redaction and the parsers still load at import.
 
 ## [0.6.0] - 2026-09-23
 
