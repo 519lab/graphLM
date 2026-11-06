@@ -44,7 +44,17 @@ def _load_env_files() -> None:
         load_dotenv(user_env, override=False)
 
 
-_load_env_files()
+def load_user_env() -> None:
+    """Load graphlm's user-level .env — called by graphlm's own entry points.
+
+    Deliberately *not* run at import time: ``import graphlm`` inside a host
+    process (an agent gateway, an IDE plugin) must not copy graphlm's config
+    file into that process's environment. The CLI calls this at startup, and
+    ``generate_graph`` calls it only when graphlm itself owns the model call
+    (no injected backend, not structure-only). Idempotent: ``override=False``
+    never rewrites a variable that is already set.
+    """
+    _load_env_files()
 
 
 # Default maximum context window (tokens) — ~128k with room for output

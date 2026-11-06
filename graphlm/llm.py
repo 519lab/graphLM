@@ -119,6 +119,38 @@ def _extract_json(text: str) -> str | None:
     return None
 
 
+def parse_reply(
+    content: str, response_format: type[CodebaseGraph] | None = None
+) -> CodebaseGraph | str:
+    """Turn a model's reply text into graphlm's result — the one parse path.
+
+    Shared by the HTTP client (:func:`call_llm`) and injected backends
+    (:func:`graphlm.backend.complete`) so both transports accept exactly the
+    same replies. Returns the validated ``response_format`` model, or the
+    extracted JSON text when no format is requested.
+    """
+    if not content:
+        raise GraphLLErrorParse("LLM returned an empty response")
+
+    json_text = _extract_json(content)
+    if json_text is None:
+        raise GraphLLErrorParse(
+            f"Could not extract JSON from LLM response. "
+            f"Response preview: {content[:200]}"
+        )
+
+    if response_format is not None:
+        try:
+            return response_format.model_validate_json(json_text)
+        except Exception as e:
+            raise GraphLLErrorParse(
+                f"JSON response did not match expected schema: {e}\n"
+                f"Response preview: {json_text[:500]}"
+            )
+
+    return json_text
+
+
 class GraphLLErrorTruncated(GraphLLErrorParse):
     """The model hit its max_tokens ceiling and returned truncated output."""
 
@@ -405,29 +437,7 @@ def call_llm(
                 if on_usage is not None and streamed.usage is not None:
                     on_usage(streamed.usage)
 
-                if not content:
-                    raise GraphLLErrorParse("LLM returned an empty response")
-
-                # Try to parse JSON from the response
-                json_text = _extract_json(content)
-                if json_text is None:
-                    raise GraphLLErrorParse(
-                        f"Could not extract JSON from LLM response. "
-                        f"Response preview: {content[:200]}"
-                    )
-
-                # Validate against schema if requested
-                if response_format is not None:
-                    try:
-                        return response_format.model_validate_json(json_text)
-                    except Exception as e:
-                        raise GraphLLErrorParse(
-                            f"JSON response did not match expected schema: {e}\n"
-                            f"Response preview: {json_text[:500]}"
-                        )
-
-                # Return raw JSON string if no schema validation requested
-                return json_text  # type: ignore[return-value]
+                return parse_reply(content, response_format)
 
         except (
             httpx.ConnectError,

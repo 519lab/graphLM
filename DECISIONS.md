@@ -4,6 +4,28 @@ Significant, hard-to-reverse decisions for graphLM. Newest first.
 
 ---
 
+## ADR-017 — Embeddable library: injected LLM backend, structure-only maps, no config read at import
+
+**Status:** Accepted (2026-11-05)
+
+**Context.** graphLM is being embedded in an agent host (a Hermes Agent plugin). The host already owns model access, credentials and billing, and runs many plugins in one long-lived process. Three things blocked that:
+1. The only transport was graphLM's own HTTP client configured from `GRAPHLM_*`, so a host had to hand graphLM a second set of credentials.
+2. `import graphlm` ran `load_dotenv(~/.config/graphlm/.env)`. That copied graphLM's config into the host process's environment, where every other component could see it. Host plugin policies (Hermes catalog rule 11) forbid reading `.env` files at all.
+3. The cheapest useful map (tree + AST edges + cycles) existed only as a side effect of `--dry-run`, labelled "DRY RUN" and never written.
+
+**Decision.**
+- `generate_graph(llm=...)` accepts an `LLMBackend`: a callable taking `(system_prompt, user_prompt, *, json_schema, schema_name, timeout, max_output_tokens)` and returning `LLMReply(text, usage)`. graphLM still builds both prompts and still parses and validates the reply through one function, `llm.parse_reply`, which the HTTP client also uses. A backend moves text and cannot change what counts as a valid graph. `usage` uses OpenAI field names so it lands in `meta.usage` unchanged.
+- The user `.env` is read by `config.load_user_env()`, never at import. Callers are the CLI (at startup) and `generate_graph` only when graphLM owns the model call (no `llm=`, not `structure_only`). Dry runs keep reading it, because `GRAPHLM_MAX_CONTEXT` shapes their stats.
+- `generate_graph(structure_only=True)` is a first-class mode: no LLM, no settings, no config read, no "DRY RUN" note, and it writes when `output_dir` is set. `structure.structure_graph` builds it and dry-run reuses it.
+- The renderer's node/link model moved from private `html_render` helpers to public `graphlm.view` (`graph_view`, `build_nodes`, `build_links`, `directory_color`, `PALETTE`). GRAPH.html now embeds `graph_view()`, so every renderer draws the same data.
+
+**Consequences.**
+- A library caller that relied on import-time `.env` loading, then read `GRAPHLM_*` from `os.environ` itself, must now call `graphlm.config.load_user_env()`. graphLM's own entry points are unaffected.
+- The private `html_render._build_nodes`, `_build_links` and `_directory_color` are gone; there are no aliases. Their tests now import from `graphlm.view`.
+- Streaming, the 400 fallback and retries are HTTP-client behaviours. A backend gets one bounded call per pass, and retry policy is the host's.
+
+---
+
 ## ADR-016 — Agent-facing map: label test code, JSON opt-in, fresh-run cleanup
 
 **Date:** 2026-09-23
