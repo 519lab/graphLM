@@ -8,7 +8,7 @@ and this project adheres to Semantic Versioning.
 ## [Unreleased]
 
 ### Infrastructure
-- **Coverage uploads to Codecov work again (#231).** Since the move to the 519lab org, every upload was rejected (`Token required - not valid tokenless upload`) while CI stayed green, because `fail_ci_if_error: false` hid the error. The upload now authenticates via GitHub OIDC (`use_oidc`, `id-token: write` on the test job), so no stored token is needed.
+- **Coverage uploads to Codecov work again (#231).** Since the move to the 519lab org, every upload was rejected (`Token required - not valid tokenless upload`) while CI stayed green, because `fail_ci_if_error: false` hid the error. The upload now authenticates via GitHub OIDC (`use_oidc`, `id-token: write` on the test job), so no stored token is needed. The `test-packs` job now uploads too, so reported coverage includes the language-pack parsers (92%, not the 79% the base job alone measures), and the README carries a coverage badge.
 
 ## [0.7.0] - 2026-11-06
 

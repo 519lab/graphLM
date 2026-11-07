@@ -23,12 +23,12 @@ uv sync --group dev --extra all              # every language pack (does NOT inc
 uv run pytest -q                             # full suite (~1320 tests, ~7s, no network — LLM is mocked via pytest-httpx; language-pack + typesafe enabled-path tests skip without their extra)
 uv run pytest tests/test_parser.py -q        # one file
 uv run pytest tests/test_parser.py::test_name -q   # one test
-uv run pytest --cov=graphlm --cov-report=term-missing   # coverage (CI reports it; ~90%, but NOT gated — no --cov-fail-under)
+uv run pytest --cov=graphlm --cov-report=term-missing   # coverage (~92% with --extra all --extra mcp --extra typesafe, ~79% base+mcp; NOT gated — no --cov-fail-under)
 uv run mypy graphlm --ignore-missing-imports # type check (separate CI job; keep it clean)
 graphlm /path/to/project --dry-run           # exercise scan + AST + context packing without any LLM call
 ```
 
-CI (`.github/workflows/ci.yml`) runs pytest+coverage on Python 3.11/3.12/3.13 (base + `mcp` extra — language-pack and `typesafe` enabled-path tests skip), a separate `test-packs` job with `graphlm[all,mcp,typesafe]` on 3.12 (the enabled path — `--extra typesafe` so `tests/test_evidence.py`'s fake-client tests run in CI instead of skipping, #188), and mypy on 3.12. There is no linter/formatter configured — match surrounding style.
+CI (`.github/workflows/ci.yml`) runs pytest+coverage on Python 3.11/3.12/3.13 (base + `mcp` extra — language-pack and `typesafe` enabled-path tests skip), a separate `test-packs` job with `graphlm[all,mcp,typesafe]` on 3.12 (the enabled path — `--extra typesafe` so `tests/test_evidence.py`'s fake-client tests run in CI instead of skipping, #188), and mypy on 3.12. Both `test (3.13)` and `test-packs` upload coverage to Codecov via OIDC (`use_oidc`, job-level `id-token: write`, #231); Codecov merges them per commit, so the README badge reflects the enabled path too. There is no linter/formatter configured — match surrounding style.
 
 ## Architecture — the big picture
 

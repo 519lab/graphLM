@@ -61,6 +61,10 @@ jobs:
   # enabled-path language-pack tests (they skip without their extra).
   test-packs:
     runs-on: ubuntu-latest
+    # id-token: OIDC auth for the Codecov upload, same as the test job (#231).
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v7
 
@@ -82,7 +86,16 @@ jobs:
         # --extra typesafe so tests/test_evidence.py (importorskip typesafe_sdk,
         # fake client — no API key needed) actually runs in CI instead of
         # skipping silently (#188). typesafe-sdk resolves from public PyPI.
-        run: uv run pytest -q
+        run: uv run pytest -q --cov=graphlm --cov-report=xml
+
+      # Uploaded alongside the base job's report: Codecov merges uploads per
+      # commit. Without this the parser packs read as uncovered (79% vs 92%).
+      - name: Upload coverage
+        uses: codecov/codecov-action@v7
+        with:
+          files: ./coverage.xml
+          use_oidc: true
+          fail_ci_if_error: false
 
   typecheck:
     runs-on: ubuntu-latest
