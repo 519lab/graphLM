@@ -15,6 +15,11 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # id-token: Codecov upload authenticates via OIDC instead of a stored
+    # CODECOV_TOKEN secret (codecov-action v7 has no tokenless upload, #231).
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -47,6 +52,7 @@ jobs:
         if: matrix.python-version == '3.13'
         with:
           files: ./coverage.xml
+          use_oidc: true
           fail_ci_if_error: false
 
   # Default `test` job above runs without language extras, so the

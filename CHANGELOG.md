@@ -7,6 +7,9 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Infrastructure
+- **Coverage uploads to Codecov work again (#231).** Since the move to the 519lab org, every upload was rejected (`Token required - not valid tokenless upload`) while CI stayed green, because `fail_ci_if_error: false` hid the error. The upload now authenticates via GitHub OIDC (`use_oidc`, `id-token: write` on the test job), so no stored token is needed.
+
 ## [0.7.0] - 2026-11-06
 
 ### Added
