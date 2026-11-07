@@ -5,6 +5,7 @@
 [![Downloads/month](https://img.shields.io/pypi/dm/graphlm)](https://pypistats.org/packages/graphlm)
 [![Total downloads](https://img.shields.io/pepy/dt/graphlm)](https://pepy.tech/projects/graphlm)
 [![CI](https://img.shields.io/github/actions/workflow/status/519lab/graphLM/ci.yml?branch=develop&label=CI)](https://github.com/519lab/graphLM/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/519lab/graphLM/develop)](https://app.codecov.io/gh/519lab/graphLM)
 [![License](https://img.shields.io/github/license/519lab/graphLM)](https://github.com/519lab/graphLM/blob/develop/LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/519lab/graphLM/develop)](https://github.com/519lab/graphLM/commits/develop)
 [![Commit activity](https://img.shields.io/github/commit-activity/m/519lab/graphLM)](https://github.com/519lab/graphLM/graphs/commit-activity)
