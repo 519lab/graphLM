@@ -91,6 +91,10 @@ class DBTable(BaseModel):
 class TestMapping(BaseModel):  # noqa: SLF001
     """A single test file and what it covers."""
 
+    # Not a pytest test class: the Test* name would otherwise be collected
+    # (PytestCollectionWarning) in every test module that imports it.
+    __test__ = False
+
     file: str = Field(description="Test file path relative to project root")
     covers: str = Field(description="What functionality this test file verifies")
 
