@@ -1,5 +1,17 @@
 # graphLM
 
+[![PyPI](https://img.shields.io/pypi/v/graphlm)](https://pypi.org/project/graphlm/)
+[![Python](https://img.shields.io/pypi/pyversions/graphlm)](https://pypi.org/project/graphlm/)
+[![Downloads/month](https://img.shields.io/pypi/dm/graphlm)](https://pypistats.org/packages/graphlm)
+[![Total downloads](https://img.shields.io/pepy/dt/graphlm)](https://pepy.tech/projects/graphlm)
+[![CI](https://img.shields.io/github/actions/workflow/status/519lab/graphLM/ci.yml?branch=develop&label=CI)](https://github.com/519lab/graphLM/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/519lab/graphLM)](https://github.com/519lab/graphLM/blob/develop/LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/519lab/graphLM/develop)](https://github.com/519lab/graphLM/commits/develop)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/519lab/graphLM)](https://github.com/519lab/graphLM/graphs/commit-activity)
+[![Open issues](https://img.shields.io/github/issues/519lab/graphLM)](https://github.com/519lab/graphLM/issues)
+[![Open PRs](https://img.shields.io/github/issues-pr/519lab/graphLM)](https://github.com/519lab/graphLM/pulls)
+[![Stars](https://img.shields.io/github/stars/519lab/graphLM?style=flat)](https://github.com/519lab/graphLM)
+
 **Point it at a codebase. Get back a map.**
 
 You've cloned an unfamiliar repo and you're staring at 400 files wondering where anything *is*. graphLM reads the project the way you would — but faster — and hands you a map: what the modules are, how they depend on each other, where data flows, which imports form nasty little cycles, and "where do I find X?" answers. It comes out as **Markdown** to read, **JSON** to script against, and an **interactive HTML graph** to click around in.
