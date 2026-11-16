@@ -12,10 +12,14 @@ on:
 
 jobs:
   claude-review:
-    # Runs that Dependabot triggers get only Dependabot secrets, so CLAUDE_CODE_OAUTH_TOKEN
-    # is empty and the review fails. Keyed on the actor, not the PR author: a person pushing to
-    # a Dependabot branch triggers a run with the repository secrets, and that one is reviewed.
-    if: github.actor != 'dependabot[bot]'
+    # claude-code-action fails any run on a pull request a bot opened ("Workflow initiated by
+    # non-human actor"), and runs Dependabot triggers get only Dependabot secrets, so
+    # CLAUDE_CODE_OAUTH_TOKEN is empty there. Skip both. Bot-opened pull requests are the
+    # promotion and changelog roll-up PRs (github-actions[bot] or the release app) and
+    # Dependabot's bumps; the promotion's commits were each reviewed in their own PRs.
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.user.type != 'Bot'
 
     runs-on: ubuntu-latest
     permissions:
