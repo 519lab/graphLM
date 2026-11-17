@@ -27,7 +27,7 @@ fresh session starting from a clean, synced `main`.
 ## First step in the new session
 
 ```bash
-cd /home/ggrace/coding-projects/graphLM
+cd graphLM   # your checkout
 git fetch origin && git checkout main && git pull --ff-only   # confirm at e0024e6+
 git checkout -b feat/js-ts-pack        # Phase 1 branch
 uv run pytest -q                        # confirm 404 green before starting

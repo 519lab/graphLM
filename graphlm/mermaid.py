@@ -2,7 +2,7 @@
 
 Why a Mermaid block at all: GitHub (and most Markdown viewers) render Mermaid
 fences natively, so the map gets a *picture* with no CDN, no build step, and no
-separate file — unlike ``GRAPH.html``, which loads D3 from a CDN and is blank
+separate file — unlike ``GRAPH.html``, which loads a pinned D3 build from a CDN and is blank
 offline. Why directory-level: a file-level graph of a real project is hundreds
 of nodes and unreadable in a Markdown page; collapsing each file to its parent
 directory gives a package-dependency view that fits on one screen, and the
@@ -19,6 +19,7 @@ import re
 from collections import defaultdict
 from collections.abc import Callable
 
+from graphlm.md_safe import md_fence, no_controls
 from graphlm.models import CodebaseGraph, ImportEdge
 
 # Red used for cycle members — the same hue as the ``in_cycle`` ring in
@@ -59,9 +60,14 @@ def _collapse_dir(path: str) -> str:
 def _mermaid_label(label: str) -> str:
     """Escape a label for use inside a quoted Mermaid node label.
 
-    Only ``"`` breaks a quoted label; Mermaid's ``#quot;`` entity restores it.
+    ``"`` would end the quoted label (Mermaid's ``#quot;`` entity restores
+    it), and a control character could end the line — and with it the
+    diagram — so it is shown as a visible escape instead. Labels are
+    repository paths (or model-written ones), so both are reachable.
     """
-    return label.replace('"', "#quot;")
+    # A label starting with a backtick switches Mermaid into "markdown
+    # string" mode; #96; is the backtick entity.
+    return no_controls(label).replace('"', "#quot;").replace("`", "#96;")
 
 
 def _assign_ids(labels: list[str]) -> dict[str, str]:
@@ -202,7 +208,7 @@ def render_mermaid(graph: CodebaseGraph, *, max_nodes: int = 40) -> list[str]:
         f"{source_note} — directory-level view; files are collapsed to their "
         "parent directory.\n"
     )
-    lines.append("```mermaid")
+    fence_at = len(lines)  # fence chosen once the body is known
     lines.append("flowchart LR")
     for label in nodes:
         lines.append(f'    {ids[label]}["{_mermaid_label(label)}"]')
@@ -223,7 +229,9 @@ def render_mermaid(graph: CodebaseGraph, *, max_nodes: int = 40) -> list[str]:
     for label in cycle_nodes:
         color = TEST_CYCLE_COLOR if label in test_cycle_dirs else CYCLE_COLOR
         lines.append(f"    style {ids[label]} stroke:{color},stroke-width:2px")
-    lines.append("```\n")
+    open_fence, close_fence = md_fence("\n".join(lines[fence_at:]), "mermaid")
+    lines.insert(fence_at, open_fence)
+    lines.append(close_fence + "\n")
 
     if prod_cyclic:
         lines.append("Red edges are members of a production import cycle.")

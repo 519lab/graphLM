@@ -12,6 +12,7 @@ single-sourced. (Module *importance* stays in ``render.py`` — its
 from __future__ import annotations
 
 from graphlm.models import GraphMeta
+from graphlm.md_safe import md_code
 
 
 def usage_summary(meta: GraphMeta) -> str | None:
@@ -76,7 +77,7 @@ def evidence_summary(meta: GraphMeta) -> str | None:
         f"(n={e.scored} scored, {e.skipped} skipped)"
     )
     if e.low:
-        worst = ", ".join(f"{fs.path} {fs.score:.2f}" for fs in e.low[:3])
+        worst = ", ".join(f"{md_code(fs.path)} {fs.score:.2f}" for fs in e.low[:3])
         text += f"; weakest: {worst}"
     return text
 

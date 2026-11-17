@@ -90,7 +90,7 @@ python -c "import json; print(json.load(open('.graphlm/GRAPH.json'))['meta'])"
 
 - **Not measured against the live endpoint in this session** — the usage
   chunk shape is the OpenAI `stream_options` contract, exercised with mocked
-  SSE bodies. Whether `studio.gracebkp.cloud` (the default Qwen endpoint)
+  SSE bodies. Whether the Qwen endpoint used for these runs
   honours `stream_options` is unverified; if it ignores the option the
   stamp shows `"prompt_tokens": null` and the line reads "not reported by
   endpoint" — the designed degradation, not a failure.

@@ -5,14 +5,19 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 from graphlm.exclusions import _ALWAYS_EXCLUDE, _should_exclude
-from graphlm.redact import _is_sensitive_file, _redact_secrets
+from graphlm.bounded_read import read_bytes_bounded, read_text_bounded
+from graphlm.limits import MAX_SOURCE_READ
+from graphlm.redact import _redact_secrets
+from graphlm.sensitive_files import _is_sensitive_file
 from graphlm.scan_guards import (
     _is_nested_checkout,
     _path_is_inside,
     _symlink_hides_sensitive,
+    _unsafe_name,
     load_graphlmignore,
 )
 from graphlm.testpaths import is_test_path
@@ -152,7 +157,7 @@ def _is_binary(path: Path) -> bool:
 
 def _read_bytes(path: Path) -> bytes | None:
     try:
-        return path.read_bytes()
+        return read_bytes_bounded(path, MAX_SOURCE_READ)
     except (OSError, PermissionError):
         return None
 
@@ -307,13 +312,23 @@ def scan_project(
             return 5
         return 8
 
-    def _scan_dir(dir_path: Path, indent: str, *, tree_visit: bool) -> None:
+    def _scan_dir(
+        dir_path: Path, indent: str, *, tree_visit: bool
+    ) -> Iterator[tuple[Path, str, bool]]:
+        """Scan one directory; yield each child directory to descend into.
+
+        A generator, not a recursive call: the driver below runs each yielded
+        child to completion before resuming this one, so the order of tree
+        lines and of the line-ceiling check is exactly that of a depth-first
+        recursion — without recursion's depth limit (a tree nested ~1000 deep
+        raised RecursionError).
+        """
         nonlocal skipped_count, tree_stopped
         # tree_visit: the old tree walk entered this directory, so its skips
         # and its tree lines apply. False: only the old file walk saw it.
         # Stat while the scandir iterator is still open. DirEntry results are
         # not guaranteed once it closes.
-        rows: list[tuple[bool, str, Path, bool, bool]] = []
+        rows: list[tuple[bool, str, Path, bool, bool, bool]] = []
         try:
             with os.scandir(dir_path) as iterator:
                 for dir_entry in iterator:
@@ -325,8 +340,20 @@ def scan_project(
                         is_link = dir_entry.is_symlink()
                     except OSError:
                         is_link = False
+                    try:
+                        # Follows links: a link to a regular file is a file.
+                        is_file = dir_entry.is_file()
+                    except OSError:
+                        is_file = False
                     rows.append(
-                        (not is_dir, dir_entry.name, Path(dir_entry.path), is_dir, is_link)
+                        (
+                            not is_dir,
+                            dir_entry.name,
+                            Path(dir_entry.path),
+                            is_dir,
+                            is_link,
+                            is_file,
+                        )
                     )
         except PermissionError:
             if tree_visit:
@@ -343,7 +370,14 @@ def scan_project(
         rows.sort(key=lambda row: (row[0], row[1]))
 
         listable: list[tuple[Path, bool]] = []
-        for _files_after_dirs, _name, path, is_dir, is_link in rows:
+        for _files_after_dirs, name, path, is_dir, is_link, is_file in rows:
+            # A name with a newline or other control character would split its
+            # tree line and write its own lines into the pass-1 prompt and the
+            # map. No real project needs one; skip it before anything else.
+            if _unsafe_name(name):
+                if tree_visit:
+                    skipped_count += 1
+                continue
             rel_str = str(path.relative_to(project_dir))
 
             if _should_exclude(rel_str, all_exclude):
@@ -379,11 +413,20 @@ def scan_project(
                 continue
 
             if not is_dir:
+                # Only regular files are read. Opening a FIFO with no writer
+                # blocks forever; sockets and device nodes are not text.
+                # (A broken symlink is skipped here too.)
+                if not is_file:
+                    if tree_visit:
+                        skipped_count += 1
+                    continue
                 if _is_binary(path):
                     if tree_visit:
                         skipped_count += 1
                     continue
-                if _is_sensitive_file(path) or _symlink_hides_sensitive(path, all_exclude):
+                if _is_sensitive_file(path) or _symlink_hides_sensitive(
+                    path, all_exclude, project_dir
+                ):
                     # Both old walks counted a sensitive file the tree saw.
                     if tree_visit:
                         skipped_count += 1
@@ -416,7 +459,7 @@ def scan_project(
                 # ~151k tokens and zeroed the pass-2 edge budget (#69).
                 if is_dir:
                     tree_lines.append(f"{indent}{path.name}/")
-                    _scan_dir(path, indent + "  ", tree_visit=True)
+                    yield (path, indent + "  ", True)
                 else:
                     tree_lines.append(f"{indent}{path.name}")
             # The omitted marker is emitted only when the line ceiling did not
@@ -444,9 +487,18 @@ def scan_project(
                 skipped_count += 1
 
         for child in pending_dirs:
-            _scan_dir(child, indent + "  ", tree_visit=False)
+            yield (child, indent + "  ", False)
 
-    _scan_dir(project_dir, "  ", tree_visit=True)
+    walk: list[Iterator[tuple[Path, str, bool]]] = [
+        _scan_dir(project_dir, "  ", tree_visit=True)
+    ]
+    while walk:
+        try:
+            child_dir, child_indent, child_tree_visit = next(walk[-1])
+        except StopIteration:
+            walk.pop()
+            continue
+        walk.append(_scan_dir(child_dir, child_indent, tree_visit=child_tree_visit))
     if tree_stopped:
         tree_lines.append(
             f"… tree truncated at {max_tree_lines} total lines "
@@ -474,12 +526,19 @@ def scan_project(
             continue
 
         try:
-            content = fpath.read_text(encoding="utf-8", errors="replace")
-            # Captured before any cut so cycle scoring sees the real size.
-            line_count = content.count("\n") + 1
+            # Bounded: a huge file is read only up to its head, but the line
+            # count still covers the whole file (cycle scoring sees its size).
+            content, line_count, complete = read_text_bounded(
+                fpath, max(MAX_SOURCE_READ, max_file_chars)
+            )
             truncated = False
             import_cache = None
-            if len(content) > max_file_chars:
+            if not complete:
+                # Past the read bound: keep the head. A skeleton of a prefix
+                # would present a partial API as the whole one.
+                content = content[:max_file_chars]
+                truncated = True
+            elif len(content) > max_file_chars:
                 # Prefer the signature skeleton (every symbol) over the head of
                 # the file (the first few). The cap applies only if the skeleton
                 # is *still* over it (bodies already gone) or no renderer exists.

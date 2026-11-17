@@ -668,7 +668,7 @@ class TestSkeletonInPrompt:
             output_dir=tmp_path,
         )
         prompt = self._pass2_user_content(httpx_mock)
-        assert "### File: big_module.py" in prompt
+        assert '<file path="big_module.py"' in prompt
         assert "# [graphlm skeleton: bodies elided; 202 source lines]" in prompt
         assert "def merge_inventories(" in prompt  # deep in the file; the head lost it
         assert "[graphlm skeleton: …]" in prompt  # the instruction-block sentence
@@ -914,7 +914,7 @@ class TestEvidenceIntegration:
         # (the only link between a low score and what a reader sees).
         md = (tmp_path / "GRAPH.md").read_text()
         assert "summary evidence support" in md
-        assert "weakest: app/routes.py 0.30" in md
+        assert "weakest: `app/routes.py` 0.30" in md
 
     def test_no_evidence_flag_skips_scoring(self, httpx_mock, tmp_path, monkeypatch):
         called = {"n": 0}

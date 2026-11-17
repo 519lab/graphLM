@@ -521,10 +521,33 @@ class TestWriteOutputs:
     def test_cleanup_runs_even_with_no_diff(self):
         with TemporaryDirectory() as tmpdir:
             out = Path(tmpdir)
-            (out / "GRAPH.json").write_text("stale")
+            # A prior graphlm graph (pre-working-copy layout): graphlm owns
+            # the dir. (A GRAPH.json that is NOT a graphlm graph does not count
+            # — test_unrelated_graph_json_is_never_deleted.)
+            (out / "GRAPH.json").write_bytes(render_json(self._versioned("0.6.0")))
             # --no-diff: cleanup must still remove the stale deliverable.
             write_outputs(self._versioned("0.6.0"), out, json=False, html=False, diff=False)
             assert not (out / "GRAPH.json").exists()
+
+    def test_unrelated_graph_json_is_never_deleted(self):
+        # A first run into a user directory that already holds files with
+        # graphlm's names (but no graphlm state) must not delete them.
+        with TemporaryDirectory() as tmpdir:
+            out = Path(tmpdir)
+            (out / "GRAPH.json").write_text('{"user": "data"}')
+            (out / "GRAPH.html").write_text("<p>user page</p>")
+            (out / "GRAPH_DIFF.md").write_text("user notes")
+            write_outputs(self._versioned("0.7.1"), out, json=False, html=False, diff=False)
+            assert (out / "GRAPH.json").read_text() == '{"user": "data"}'
+            assert (out / "GRAPH.html").read_text() == "<p>user page</p>"
+            assert (out / "GRAPH_DIFF.md").read_text() == "user notes"
+
+    def test_plain_text_graph_json_is_not_deleted(self):
+        with TemporaryDirectory() as tmpdir:
+            out = Path(tmpdir)
+            (out / "GRAPH.json").write_text("my own notes, not JSON")
+            write_outputs(self._versioned("0.7.1"), out, json=False, html=False, diff=False)
+            assert (out / "GRAPH.json").read_text() == "my own notes, not JSON"
 
     def test_refuses_to_write_through_graph_json_symlink(self):
         graph = CodebaseGraph(directory_tree="root/\n")
@@ -1245,7 +1268,7 @@ class TestEvidenceSummary:
         text = evidence_summary(self._meta(es))
         assert "mean 0.81" in text
         assert "20 scored, 2 skipped" in text
-        assert "models.py 0.23" in text
+        assert "`models.py` 0.23" in text
 
     def test_na_mean_when_nothing_scored(self):
         from graphlm.models import EvidenceSupport

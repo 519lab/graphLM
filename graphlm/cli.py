@@ -241,7 +241,10 @@ def main(
         None,
         "-k",
         "--api-key",
-        help="LLM API key (or set GRAPHLM_API_KEY env var).",
+        help=(
+            "LLM API key. Prefer GRAPHLM_API_KEY or ~/.config/graphlm/.env: "
+            "a command-line key is visible in `ps` and shell history."
+        ),
     ),
     model: str = typer.Option(
         None,

@@ -4,6 +4,7 @@ import logging
 
 from graphlm.context import (
     MESSAGE_OVERHEAD_TOKENS,
+    _tree_block,
     assemble_pass1_prompt,
     assemble_pass2_prompt,
     estimate_tokens,
@@ -87,7 +88,7 @@ class TestPass2Prompt:
         prompt, tokens, _truncated = assemble_pass2_prompt(scan.tree, scan.file_fragments)
         assert scan.tree in prompt
         for frag in scan.file_fragments:
-            assert f"File: {frag.rel_path}" in prompt
+            assert f'<file path="{frag.rel_path}"' in prompt
             assert frag.content[:50] in prompt
 
     def test_prompt_contains_instructions(self):
@@ -142,7 +143,8 @@ class TestPass2Prompt:
             for i in range(300)
             for j in range(20)
         ]
-        max_context = MESSAGE_OVERHEAD_TOKENS + 2000
+        # +2400: room for the boundary section the instruction block now carries.
+        max_context = MESSAGE_OVERHEAD_TOKENS + 2400
         prompt, _tokens, _truncated = assemble_pass2_prompt(
             "proj/",
             [],
@@ -495,7 +497,9 @@ class TestMaxContext:
         assert "directory tree already fills the context budget" in caplog.text
         assert "2 parser edges still used for cycle detection" in caplog.text
         assert "0-token" not in caplog.text
-        assert str(estimate_tokens(tree)) in caplog.text
+        # The prompt carries the tree inside its boundary block; that is the
+        # cost reported (any 16-hex boundary has the same length).
+        assert str(estimate_tokens(_tree_block(tree, "0" * 16))) in caplog.text
         assert "max_context=5000" in caplog.text
 
     def test_small_edge_table_keeps_exhaustive_framing(self):
