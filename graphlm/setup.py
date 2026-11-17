@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from graphlm.child_env import child_env
+
 from graphlm.upgrade import (
     _abs_no_follow,
     _installer_cwd,
@@ -273,7 +275,7 @@ def run_setup(
         if plan.argv:
             _echo("+ " + " ".join(plan.argv))
             try:
-                result = runner(list(plan.argv), cwd=_installer_cwd())
+                result = runner(list(plan.argv), cwd=_installer_cwd(), env=child_env())
                 rc = int(result.returncode)
             except Exception as e:  # installer tool blew up
                 _echo(f"Install command failed to run: {e}")

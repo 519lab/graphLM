@@ -7,6 +7,12 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+- **Processes graphlm starts no longer inherit its API keys.** `git` (for the commit stamp) and the installers run by `--upgrade` / `--setup` received the full environment, including `GRAPHLM_API_KEY` and `TYPESAFE_API_KEY` loaded from your config. They now get the environment without graphlm's own variables; proxies and pip/uv settings still pass through.
+- **A readable config file is called out.** When `~/.config/graphlm/.env` (which holds API keys) is readable by other users, graphlm now warns and suggests `chmod 600`.
+
+### Docs
+- `--api-key` help now recommends the environment variable or config file, since a key on the command line is visible in `ps` and shell history. The `--serve` docs no longer claim the server never uses the network: `search` calls the TypeSafe API when a TypeSafe key is configured. Removed a private hostname and a local path from two planning documents.
 ### Changed
 - **`GRAPH.html` now loads one exact, integrity-checked build of D3 and runs no other script.** It used a floating `d3.v7` URL with no integrity check, so whoever controlled that URL could run script in every generated graph page. The page now loads `d3@7.9.2` from jsDelivr with a Subresource Integrity hash, and a Content-Security-Policy allows only that file and the page's own inline script (by hash). The page still needs network access to draw the graph.
 

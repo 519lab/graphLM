@@ -25,6 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from graphlm.child_env import child_env
+
 # Language extras that ``graphlm[all]`` aggregates. ``mcp`` is separate.
 _LANG_EXTRAS = ("js", "java", "rust", "csharp", "cpp", "go", "php")
 _EXTRA_MODULES = {
@@ -411,5 +413,5 @@ def run_upgrade(
     if not plan.argv:
         return 2
     _echo("+ " + " ".join(plan.argv))
-    result = runner(list(plan.argv), cwd=_installer_cwd())
+    result = runner(list(plan.argv), cwd=_installer_cwd(), env=child_env())
     return int(result.returncode)

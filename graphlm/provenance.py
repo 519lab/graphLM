@@ -1,7 +1,11 @@
 """Provenance capture — the git SHA, timestamp, and package version the graph
 was generated against.
 
-This is the *only* module in graphlm that reads git or shells out. The feature
+This is the only module in graphlm that runs git (``git rev-parse HEAD`` —
+never ``status``/``diff``, which would run a hostile repo's ``core.fsmonitor``
+or pager). The only other subprocesses are the installers started by
+``--upgrade`` / ``--setup`` (``upgrade.py``, ``setup.py``). All of them get
+:func:`graphlm.child_env.child_env`, without graphlm's keys. The feature
 that consumes it (the self-refreshing directive in ``render.py``) treats a
 missing SHA as normal, not an error, so every function here is failure-tolerant:
 a non-git project, git not installed, or an empty/brand-new repo yields
@@ -14,6 +18,8 @@ import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+
+from graphlm.child_env import child_env
 
 # A git commit hash: 40 hex chars (SHA-1) or 64 (SHA-256, `git init
 # --object-format=sha256`). We validate the SHA rather than trusting exit codes
@@ -76,6 +82,7 @@ def git_commit_sha(project_dir: str | Path) -> str | None:
             text=True,
             timeout=_GIT_TIMEOUT,
             check=False,
+            env=child_env(),
         )
     except (OSError, subprocess.SubprocessError):
         # git not on PATH, cwd vanished, timeout, etc. — all "no SHA".
