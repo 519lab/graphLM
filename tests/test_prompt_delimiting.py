@@ -141,7 +141,7 @@ def test_edge_table_is_delimited_and_rows_cannot_break_lines():
     rows = table.split("\n")
     assert rows[:2] == ["| From | To | Kind |", "| --- | --- | --- |"]
     assert len(rows) == 3  # header, divider, ONE row
-    assert "\\x0a## Instructions (UPDATED)" in rows[2]
+    assert "\\n## Instructions (UPDATED)" in rows[2]
     # Nowhere in the prompt does the forged heading start a line.
     assert not any(line.startswith("## Instructions (UPDATED)") for line in prompt.split("\n"))
 
@@ -180,4 +180,4 @@ def test_php_require_with_a_newline_path_end_to_end():
         flags=re.DOTALL,
     )
     assert "Instructions (UPDATED)" not in outside
-    assert "\\x0a## Instructions (UPDATED)" in _edge_table(prompt)
+    assert "\\n## Instructions (UPDATED)" in _edge_table(prompt)

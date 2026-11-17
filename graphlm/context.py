@@ -7,10 +7,10 @@ Pass 2: Send tree + selected files — LLM produces the final graph.
 from __future__ import annotations
 
 import logging
-import re
 import secrets
 from dataclasses import dataclass, field
 
+from graphlm.md_safe import no_controls
 from graphlm.models import ImportEdge
 from graphlm.scanner import FileFragment, ScanResult, estimate_tokens
 
@@ -73,22 +73,15 @@ def _attr(value: str) -> str:
     )
 
 
-_ROW_CONTROL = re.compile("[\x00-\x1f\x7f\x85\u2028\u2029]")
-
-
-def _visible(match: re.Match[str]) -> str:
-    code = ord(match.group(0))
-    return f"\\x{code:02x}" if code < 0x100 else f"\\u{code:04x}"
-
-
 def _cell(value: str) -> str:
     """A parser-derived name for the edge table: one line, no cell break.
 
     Edge endpoints come from string literals in the scanned files (PHP
     ``require``, JS ``import``), so a path can carry a newline and text that
-    reads like a prompt section; control characters are shown as escapes.
+    reads like a prompt section; control and invisible characters are shown
+    as escapes (``md_safe.no_controls``, the same form the map uses).
     """
-    return _ROW_CONTROL.sub(_visible, value).replace("|", "\\|")
+    return no_controls(value).replace("|", "\\|")
 
 
 def _tree_block(tree: str, boundary: str) -> str:
