@@ -115,7 +115,7 @@ class TestMakeSetupPlan:
             _iu, "find_spec", lambda name: object() if name == "pip" else _iu.find_spec(name)
         )
         p = self._plan(monkeypatch, "pip", ("php",))
-        assert p.argv == ("/venv/bin/python", "-m", "pip", "install", "graphlm[php]")
+        assert p.argv == ("/venv/bin/python", "-P", "-m", "pip", "install", "graphlm[php]")
 
     def test_pip_absent_refuses(self, monkeypatch):
         # A uv-tool/uv venv often has no importable pip — refuse with a hint

@@ -7,8 +7,11 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+- **Security: `graphlm --upgrade` and `graphlm --setup` no longer run the installer inside the directory you are standing in.** graphlm is usually run from the repository it maps, and that repository is untrusted. Several installers read files from their working directory, so a repository could make the upgrade or setup install step run its own code or install from an index it chose. The installer now always runs from your home directory, and the pip branches add `python -P` so the working directory never lands on `sys.path`. Your own pip / uv / pipx configuration still applies. Upgrade with `graphlm --upgrade` from a directory you trust (your home directory, for example).
+
 ### Infrastructure
-- The Claude Code Review check no longer fails on Dependabot pull requests. Runs that Dependabot triggers only get Dependabot secrets, so the review ran with an empty OAuth token and went red on most of them (since at least 2026-11-09). The review job is now skipped when Dependabot triggers the run.
+- The Claude Code Review check no longer fails on Dependabot pull requests. Runs that Dependabot triggers only get Dependabot secrets, so the review ran with an empty OAuth token and went red on most of them (since at least 2026-11-09). The review job is now skipped when Dependabot triggers the run, and on every pull request a bot opened: the promotion and changelog roll-up PRs failed it the same way ("Workflow initiated by non-human actor").
 - **Coverage uploads to Codecov work again (#231).** Since the move to the 519lab org, every upload was rejected (`Token required - not valid tokenless upload`) while CI stayed green, because `fail_ci_if_error: false` hid the error. The upload now authenticates via GitHub OIDC (`use_oidc`, `id-token: write` on the test job), so no stored token is needed. The `test-packs` job now uploads too, so reported coverage includes the language-pack parsers (92%, not the 79% the base job alone measures), and the README carries a coverage badge.
 - The promotion workflow is pinned to the shared `promote` workflow v1.1.0 (was v1.0.2), whose own checkout step runs on Node 24 instead of the deprecated Node 20.
 

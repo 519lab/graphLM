@@ -6,6 +6,7 @@ import subprocess
 
 from graphlm.upgrade import (
     _collapse_extras,
+    _installer_cwd,
     _spec,
     detect_installer,
     installed_extras,
@@ -238,7 +239,7 @@ class TestMakePlan:
         monkeypatch.setattr("graphlm.upgrade.importlib.util.find_spec", _find)
         plan = make_plan(executable=exe, which=lambda n: None)
         assert plan.installer == "pip"
-        assert plan.argv[1:] == ("-m", "pip", "install", "--upgrade", "graphlm[mcp,all]")
+        assert plan.argv[1:] == ("-P", "-m", "pip", "install", "--upgrade", "graphlm[mcp,all]")
 
     def test_pip_without_pip_module_refuses(self, tmp_path, monkeypatch):
         import importlib.util as util
@@ -274,8 +275,11 @@ class TestRunUpgrade:
         exe.write_text("")
         calls: list[list[str]] = []
 
-        def fake_run(argv):
+        cwds: list[object] = []
+
+        def fake_run(argv, **kwargs):
             calls.append(list(argv))
+            cwds.append(kwargs.get("cwd"))
             return subprocess.CompletedProcess(argv, 0)
 
         lines: list[str] = []
@@ -287,6 +291,7 @@ class TestRunUpgrade:
         )
         assert code == 0
         assert calls == [["/bin/uv", "tool", "upgrade", "graphlm"]]
+        assert cwds == [_installer_cwd()]  # never the caller's cwd
         assert any("uv tool" in s for s in lines)
 
     def test_source_returns_2_without_running(self, tmp_path, monkeypatch):
@@ -302,7 +307,7 @@ class TestRunUpgrade:
         code = run_upgrade(
             executable=exe,
             which=lambda n: None,
-            runner=lambda argv: ran.append(argv) or subprocess.CompletedProcess(argv, 0),
+            runner=lambda argv, **k: ran.append(argv) or subprocess.CompletedProcess(argv, 0),
             echo=lambda s: None,
         )
         assert code == 2
