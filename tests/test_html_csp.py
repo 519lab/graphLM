@@ -13,9 +13,8 @@ _CSP = re.compile(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)"
 
 
 def _inline_script(html: str) -> str:
-    match = re.search(r"<script>(.*?)</script>", html, re.DOTALL)
-    assert match is not None
-    return match.group(1)
+    start = html.index("<script>") + len("<script>")
+    return html[start:html.index("</script>", start)]
 
 
 def _graph(desc: str = "entry") -> CodebaseGraph:
@@ -52,3 +51,10 @@ def test_graph_data_cannot_steal_the_placeholder():
     assert "{CSP_SCRIPT_HASH}" not in policy
     # Data stays inside the one inline script (escaped), so the hash covers it.
     assert html.count("<script>") == 1
+
+
+def test_template_without_inline_script_allows_no_inline_script():
+    from graphlm.html_render import _with_csp_hash
+
+    html = """<meta http-equiv="Content-Security-Policy" content="script-src '{CSP_SCRIPT_HASH}' https://x/">"""
+    assert _with_csp_hash(html) == """<meta http-equiv="Content-Security-Policy" content="script-src https://x/">"""

@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import re
 from pathlib import Path
 
 from graphlm.models import CodebaseGraph
@@ -35,7 +34,12 @@ def _json_for_script(value: object) -> str:
     )
 
 
-_INLINE_SCRIPT = re.compile(r"<script>(.*?)</script>", re.DOTALL)
+# The template's one inline script opens with a bare `<script>` (the D3 tag
+# has attributes). This locates graphlm's own template script — it is not a
+# filter over untrusted HTML; graph data inside it is escaped by
+# _json_for_script, so it can never contain `</script>`.
+_INLINE_OPEN = "<script>"
+_INLINE_CLOSE = "</script>"
 
 
 def _with_csp_hash(html: str) -> str:
@@ -49,10 +53,12 @@ def _with_csp_hash(html: str) -> str:
     placeholder even if graph data repeats the string; ``_json_for_script``
     escapes ``<``, so the data cannot end the inline script early.
     """
-    match = _INLINE_SCRIPT.search(html)
-    if match is None:  # template without an inline script: allow none
+    start = html.find(_INLINE_OPEN)
+    end = html.find(_INLINE_CLOSE, start + len(_INLINE_OPEN)) if start != -1 else -1
+    if end == -1:  # template without an inline script: allow none
         return html.replace("'{CSP_SCRIPT_HASH}' ", "", 1)
-    digest = hashlib.sha256(match.group(1).encode("utf-8")).digest()
+    script = html[start + len(_INLINE_OPEN):end]
+    digest = hashlib.sha256(script.encode("utf-8")).digest()
     token = "sha256-" + base64.b64encode(digest).decode("ascii")
     return html.replace("{CSP_SCRIPT_HASH}", token, 1)
 
