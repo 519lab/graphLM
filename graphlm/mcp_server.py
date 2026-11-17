@@ -3,8 +3,11 @@
 A stdio Model Context Protocol server that exposes ``graphlm/query.py`` as
 typed tools, so a coding agent (Claude Code, Codex, Cursor, …) can ask the map
 "who imports X?" for a few hundred tokens instead of reading the whole
-``GRAPH.md``. Zero LLM calls, zero network: every tool is a pure function over
-the already-generated ``GRAPH.json``.
+``GRAPH.md``. Zero LLM calls: every tool is a pure function over the
+already-generated map. The one exception to "no network" is ``search`` when
+``TYPESAFE_API_KEY`` and the ``typesafe`` extra are present: it sends the
+agent's question and the map's file summaries to the TypeSafe API to rank them
+(without a key it falls back to local token search).
 
 Design notes:
 

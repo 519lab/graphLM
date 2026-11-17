@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import stat
 from pathlib import Path
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
 from graphlm.limits import LLM_MAX_OUTPUT_TOKENS
+
+logger = logging.getLogger(__name__)
 
 
 def _user_config_path() -> Path:
@@ -41,7 +45,27 @@ def _load_env_files() -> None:
     """
     user_env = _user_config_path()
     if user_env.is_file():
+        _warn_if_readable_by_others(user_env)
         load_dotenv(user_env, override=False)
+
+
+def _warn_if_readable_by_others(path: Path) -> None:
+    """Warn when the user config — which holds API keys — is group/world
+    readable. A warning, not a refusal: the file is the user's own (POSIX only)."""
+    if os.name != "posix":
+        return
+    try:
+        mode = path.stat().st_mode
+    except OSError:
+        return
+    if mode & (stat.S_IRWXG | stat.S_IRWXO):
+        logger.warning(
+            "%s is readable by other users (mode %o) and may hold API keys; "
+            "run: chmod 600 %s",
+            path,
+            stat.S_IMODE(mode),
+            path,
+        )
 
 
 def load_user_env() -> None:
