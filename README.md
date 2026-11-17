@@ -472,7 +472,7 @@ graphlm/
 ├── prompts.py            # System prompt (injection guard)
 ├── provenance.py         # Git SHA / timestamp / version capture for the stamp
 ├── query.py              # Map-query helpers used by --serve
-├── redact.py             # Sensitive-file skip + secret redaction
+├── redact.py             # Secret redaction (never-read list: sensitive_files.py)
 ├── render.py             # Markdown + JSON + HTML output rendering
 ├── scanner.py            # Project directory scanner
 ├── skills.py             # --install-skill: agent-guide installer

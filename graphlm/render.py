@@ -10,6 +10,7 @@ from graphlm.cycles_render import render_import_cycles
 from graphlm.orientation import render_orientation
 from graphlm.telemetry_render import render_telemetry
 from graphlm.mermaid import render_mermaid
+from graphlm.safe_write import refuse_symlink
 from graphlm.models import CodebaseGraph, Cycle, GraphMeta, ModuleDescription
 
 # Module-importance display weighting. Applied HERE, at render time, to the two
@@ -352,29 +353,6 @@ class WriteResult(tuple):
         return (tuple(self), {"diff_md": self.diff_md, "diff_json": self.diff_json})
 
 
-def _refuse_symlink(path: Path) -> None:
-    """Refuse to write through a symlink (same contract as ``skills.py``, #33).
-
-    ``Path.write_text`` follows the link, so a cloned repo that plants
-    ``.graphlm/GRAPH.json`` → ``~/.bashrc`` (or ``.graphlm`` → ``$HOME``)
-    would overwrite a file graphlm did not create. Ancestor directory
-    symlinks are the same hole: ``decoy → victim`` plus ``-o decoy/out``
-    would mkdir and write inside ``victim``.
-    """
-    if path.is_symlink():
-        raise ValueError(
-            f"refusing to write through a symlink at {path} — graphlm won't "
-            "overwrite a file it didn't create. Remove the symlink and re-run."
-        )
-    for parent in path.parents:
-        if parent.is_symlink():
-            raise ValueError(
-                f"refusing to write through a symlink at {parent} — graphlm "
-                "won't overwrite a file it didn't create. Remove the symlink "
-                "and re-run."
-            )
-
-
 def write_outputs(
     graph: CodebaseGraph,
     output_dir: Path,
@@ -435,7 +413,7 @@ def write_outputs(
     if not output_dir.is_absolute():
         output_dir = Path.cwd() / output_dir
     output_dir = Path(os.path.normpath(output_dir))
-    _refuse_symlink(output_dir)
+    refuse_symlink(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     md_path = output_dir / f"{md_suffix}.md"
@@ -459,7 +437,7 @@ def write_outputs(
     )
     for p in (md_path, state_path, json_path, html_path, diff_md_path, diff_json_path):
         if p is not None:
-            _refuse_symlink(p)
+            refuse_symlink(p)
 
     # Remove graphlm's own stale artifacts (e.g. a GRAPH.json from a prior
     # version / flag toggle) — but only in a dir graphlm has written before

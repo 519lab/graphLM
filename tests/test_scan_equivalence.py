@@ -33,7 +33,8 @@ from graphlm.scan_guards import (
     _symlink_hides_sensitive,
     load_graphlmignore,
 )
-from graphlm.redact import _is_sensitive_file, _redact_secrets
+from graphlm.redact import _redact_secrets
+from graphlm.sensitive_files import _is_sensitive_file
 from graphlm.testpaths import is_test_path
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -185,7 +186,7 @@ def _legacy_scan_project(
                 if _is_binary(entry):
                     skipped_count += 1
                     continue
-                if _is_sensitive_file(entry) or _symlink_hides_sensitive(entry, all_exclude):
+                if _is_sensitive_file(entry) or _symlink_hides_sensitive(entry, all_exclude, project_dir):
                     skipped_count += 1
                     continue
                 if not include_tests and is_test_path(rel_str):
@@ -244,7 +245,7 @@ def _legacy_scan_project(
                 continue
             if _is_binary(fpath):
                 continue
-            if _is_sensitive_file(fpath) or _symlink_hides_sensitive(fpath, all_exclude):
+            if _is_sensitive_file(fpath) or _symlink_hides_sensitive(fpath, all_exclude, project_dir):
                 skipped_count += 1
                 continue
             if not include_tests and is_test_path(rel):
