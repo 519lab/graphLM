@@ -66,6 +66,8 @@ and the defenses around that are the security-sensitive surface. In scope:
   dependency when a fixed version exists.
 - **The generated `GRAPH.html` loading D3 from a CDN.** This is documented
   behavior (the graph won't render offline); it is not a vulnerability report.
+  The script is an exact version with a Subresource Integrity hash, and the
+  page's Content-Security-Policy allows no other scripts or connections.
 - Findings from automated scanners with no demonstrated, realistic impact.
 
 ## Handling of secrets

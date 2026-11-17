@@ -23,6 +23,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from graphlm.bounded_read import read_bytes_bounded
+from graphlm.limits import MAX_SOURCE_READ
+from graphlm.cycles import tarjan_scc
 from graphlm.models import ImportEdge
 from graphlm.scanner import FileFragment
 
@@ -367,7 +370,9 @@ def _source_bytes(frag: FileFragment, project_dir: Path | None) -> bytes | None:
         fpath = project_dir / frag.rel_path
         if fpath.is_file():
             try:
-                return fpath.read_bytes()
+                # Bounded like the scanner's read: imports sit at the top of a
+                # file, and a huge scanned file must not be read whole.
+                return read_bytes_bounded(fpath, MAX_SOURCE_READ)
             except (OSError, PermissionError) as e:
                 logger.warning("Could not read %s: %s", fpath, e)
                 return None
@@ -575,40 +580,6 @@ def detect_import_cycles(edges: list[ImportEdge]) -> list[list[str]]:
         if edge.scope is None:
             graph.setdefault(edge.from_path, set()).add(edge.to_path)
 
-    index_counter = [0]
-    stack: list[str] = []
-    lowlinks: dict[str, int] = {}
-    index: dict[str, int] = {}
-    on_stack: dict[str, bool] = {}
-    sccs: list[list[str]] = []
-
-    def strongconnect(v: str) -> None:
-        index[v] = index_counter[0]
-        lowlinks[v] = index_counter[0]
-        index_counter[0] += 1
-        stack.append(v)
-        on_stack[v] = True
-
-        for w in graph.get(v, set()):
-            if w not in index:
-                strongconnect(w)
-                lowlinks[v] = min(lowlinks[v], lowlinks[w])
-            elif on_stack.get(w, False):
-                lowlinks[v] = min(lowlinks[v], index[w])
-
-        if lowlinks[v] == index[v]:
-            scc = []
-            while True:
-                w = stack.pop()
-                on_stack[w] = False
-                scc.append(w)
-                if w == v:
-                    break
-            if len(scc) > 1:
-                sccs.append(sorted(scc))
-
-    for v in sorted(graph.keys()):
-        if v not in index:
-            strongconnect(v)
-
-    return sccs
+    # Same traversal as before (sorted roots), now iterative — see
+    # graphlm.cycles.tarjan_scc. Only multi-node components are cycles here.
+    return [sorted(scc) for scc in tarjan_scc(sorted(graph), graph) if len(scc) > 1]

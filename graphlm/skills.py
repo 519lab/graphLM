@@ -20,6 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from graphlm.safe_write import refuse_symlink
+
 # Supported harness identifiers (for the CLI's error message and validation).
 SUPPORTED_HARNESSES = ("claude", "codex")
 
@@ -242,16 +244,13 @@ def install_skill(
         content = _codex_guide_file(body)
         note = _codex_note(path, local)
 
-    # Refuse to write *through* a symlink at the target — the write would land on
-    # whatever the link resolves to, clobbering a file graphlm didn't create
-    # (e.g. a dotfiles-managed ~/.claude/skills/), violating this module's
-    # contract. `is_symlink()` catches broken links too (which `.exists()` would
-    # report as absent and let the no-force path fall through to a write). #33
-    if path.is_symlink():
-        raise ValueError(
-            f"refusing to write through a symlink at {path} — graphlm won't "
-            f"overwrite a file it didn't create. Remove the symlink and re-run."
-        )
+    # Refuse to write *through* a symlink — at the target, or (for a project-
+    # local install) at any directory between the project and the target: the
+    # scanned repo controls those, and `.claude → /elsewhere` would make
+    # mkdir/write_text land outside the project. A user-global install checks
+    # only the target, as before: `~/.claude` may legitimately be a dotfiles
+    # link, and the repo does not control the home directory. #33
+    refuse_symlink(path, below=base if local else path.parent)
 
     if path.exists() and not force:
         return SkillInstallResult(harness=harness, path=path, skipped=True, note=note)

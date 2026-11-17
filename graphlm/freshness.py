@@ -53,9 +53,10 @@ class BaselinePlan:
     state: "BaselineState"
     old_version: Optional[str]
     new_version: Optional[str]
-    # True when graphlm has written to this output dir before (a working copy or
-    # a readable prior GRAPH.json exists) — the gate for cleanup, so a run into a
-    # fresh user directory (`-o docs/`) never deletes a same-named user file.
+    # True when graphlm has written to this output dir before (its working copy
+    # is present, or a prior GRAPH.json parses as a graphlm graph) — the gate for
+    # cleanup, so a run into a fresh user directory (`-o docs/`) never deletes a
+    # same-named user file.
     owns_dir: bool
 
 
@@ -75,8 +76,11 @@ def prepare_baseline(
     so an absent/corrupt file never masquerades. A version change then routes a
     NORMAL baseline to ``VERSION_CHANGED`` (old_graph dropped — not a comparison).
 
-    ``owns_dir`` is True when either source was present at all (working copy, or
-    a prior GRAPH.json that at least *exists*), gating cleanup.
+    ``owns_dir`` gates cleanup. It is True when the working copy exists (that
+    name is graphlm's own), or — with no working copy — when the prior
+    GRAPH.json is a graphlm graph (NORMAL). A ``GRAPH.json`` that merely
+    exists but is not one (UNCOMPARABLE: a user's own file in an ``-o``
+    directory) must not switch deletion on; that inverted the guard.
     """
     from graphlm.diff import BaselineState, load_baseline
 
@@ -85,7 +89,7 @@ def prepare_baseline(
     if state is BaselineState.FIRST_RUN:
         legacy_path = output_dir / f"{json_suffix}.json"
         old_graph, state = load_baseline(legacy_path)
-        owns_dir = state is not BaselineState.FIRST_RUN  # a prior GRAPH.json existed
+        owns_dir = state is BaselineState.NORMAL  # a prior graphlm GRAPH.json
 
     current_version = new_graph.meta.graphlm_version if new_graph.meta else None
     old_version = prior_version(old_graph)

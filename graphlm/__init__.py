@@ -42,6 +42,7 @@ from graphlm.llm import (
     call_llm,
 )
 from graphlm.models import (
+    ArchitectureNote,
     ImportEdge,
     RunUsage,
 )
@@ -426,11 +427,23 @@ def generate_graph(
             if deterministic_edges is not None
             else graph.import_edges
         )
-        graph.import_cycles = [
-            c
-            for c in detect_cycles(cycle_edges, sloc_map=sloc_map)
-            if c.risk_score >= cycle_threshold
-        ]
+        try:
+            graph.import_cycles = [
+                c
+                for c in detect_cycles(cycle_edges, sloc_map=sloc_map)
+                if c.risk_score >= cycle_threshold
+            ]
+        except Exception as e:  # never let cycle analysis cost the paid graph
+            logging.warning("Import-cycle detection failed, continuing without it: %s", e)
+            graph.import_cycles = []
+            # Say so in the map: an empty cycle list must not read as "no cycles".
+            graph.architecture_notes.append(
+                ArchitectureNote(
+                    note="graphlm could not compute import cycles for this run "
+                    f"({type(e).__name__}); the absence of a cycle section is "
+                    "not a statement that there are none."
+                )
+            )
     else:
         graph.import_cycles = []
 

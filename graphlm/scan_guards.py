@@ -7,46 +7,70 @@ that is really another git checkout, project containment, and the ignore-file
 reader (which is a safe file read — it rejects an escaping symlink and never
 raises — not a pattern matcher, so it lives here beside ``_path_is_inside``).
 
-Imports `exclusions` (`_ALWAYS_EXCLUDE`) and `redact` (`_is_sensitive_file`);
+Imports `exclusions` (`_ALWAYS_EXCLUDE`) and `sensitive_files` (`_is_sensitive_file`);
 `scanner → scan_guards → exclusions → freshness → models` has no cycle.
 """
 
 from __future__ import annotations
 
-import fnmatch
 import logging
 from pathlib import Path
 
-from graphlm.exclusions import _ALWAYS_EXCLUDE
-from graphlm.redact import _is_sensitive_file
+from graphlm.exclusions import _ALWAYS_EXCLUDE, _should_exclude
+from graphlm.sensitive_files import _is_sensitive_file
 
 logger = logging.getLogger(__name__)
 
 
 def _symlink_hides_sensitive(
-    path: Path, exclude: tuple[str, ...] | None = None
+    path: Path, exclude: tuple[str, ...] | None, project_dir: Path
 ) -> bool:
-    """True when ``path`` is a symlink to a never-read file or excluded tree.
+    """True when ``path`` is a symlink to a never-read file or excluded path.
 
     Guards inspect the *link name*; ``read_text`` follows the target, so
     ``crypto.py → .ssh/id_rsa`` used to send the key body to the LLM, and
     ``config.yaml → secrets/prod.yaml`` still would when ``secrets`` is
     only in ``.graphlmignore``.
+
+    The target is matched exactly as the walk matches a real file: its path
+    *relative to the project* through ``_should_exclude``. So a path-style
+    pattern (``deploy/prod.yaml``, ``secrets/*.yaml``) blocks a link to that
+    file, and the directories *above* the project (a checkout under
+    ``~/build/``) never match an exclude like ``build``.
     """
     if not path.is_symlink():
         return False
     try:
-        target = path.resolve()
-    except OSError:
+        # strict: a broken link or a loop raises (OSError) on every Python
+        # version — 3.13 would otherwise return a looped path unresolved.
+        target = path.resolve(strict=True)
+        root = project_dir.resolve()
+    except (OSError, RuntimeError):  # RuntimeError: symlink loop on 3.11/3.12
         return True
     if _is_sensitive_file(target):
         return True
+    try:
+        rel_target = target.relative_to(root)
+    except ValueError:
+        # Outside the project. The walk already skips escaping links before
+        # this check; refuse here too rather than match an absolute path.
+        return True
     pats = exclude if exclude is not None else tuple(_ALWAYS_EXCLUDE)
-    for part in target.parts:
-        for pat in pats:
-            if fnmatch.fnmatch(part, pat):
-                return True
-    return False
+    return _should_exclude(str(rel_target), pats)
+
+
+# Characters that end a line for a Markdown renderer, a tokenizer or a text
+# editor. A file or directory name holding one would split its tree line and
+# let the name write its own lines into the pass-1 prompt and GRAPH.md.
+_LINE_BREAKING = frozenset("\x85\u2028\u2029")
+
+
+def _unsafe_name(name: str) -> bool:
+    """True for a name with a control character (newline, CR, ESC, …) or a
+    Unicode line/paragraph separator. Such entries are skipped by the walk:
+    no real project needs them, and they are the way a hostile tree breaks
+    out of the directory listing."""
+    return any(ord(ch) < 0x20 or ord(ch) == 0x7F or ch in _LINE_BREAKING for ch in name)
 
 
 def _is_nested_checkout(dir_path: Path) -> bool:
@@ -79,7 +103,9 @@ def _path_is_inside(project_dir: Path, target: Path) -> bool:
         # Check containment via commonpath
         common = str(project_resolved)
         return str(target_resolved).startswith(common + "/") or str(target_resolved) == common
-    except (ValueError, OSError):
+    except (ValueError, OSError, RuntimeError):
+        # RuntimeError: Python 3.11/3.12 report a symlink loop that way
+        # (3.13 returns the unresolved path). A loop is not "inside".
         return False
 
 
