@@ -7,18 +7,12 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
-### Fixed
-- **Processes graphlm starts no longer inherit its API keys.** `git` (for the commit stamp) and the installers run by `--upgrade` / `--setup` received the full environment, including `GRAPHLM_API_KEY` and `TYPESAFE_API_KEY` loaded from your config. They now get the environment without graphlm's own variables; proxies and pip/uv settings still pass through.
-- **A readable config file is called out.** When `~/.config/graphlm/.env` (which holds API keys) is readable by other users, graphlm now warns and suggests `chmod 600`.
-
-### Docs
-- `--api-key` help now recommends the environment variable or config file, since a key on the command line is visible in `ps` and shell history. The `--serve` docs no longer claim the server never uses the network: `search` calls the TypeSafe API when a TypeSafe key is configured. Removed a private hostname and a local path from two planning documents.
 ### Changed
 - **`GRAPH.html` now loads one exact, integrity-checked build of D3 and runs no other script.** It used a floating `d3.v7` URL with no integrity check, so whoever controlled that URL could run script in every generated graph page. The page now loads `d3@7.9.2` from jsDelivr with a Subresource Integrity hash, and a Content-Security-Policy allows only that file and the page's own inline script (by hash). The page still needs network access to draw the graph.
 
-### Infrastructure
-- **Release and CI workflows are harder to tamper with.** Every GitHub Action is pinned to a full commit SHA instead of a movable tag or branch. The release build refuses a `v*` tag that is not on `main`. Dependabot auto-merge now checks who opened the pull request rather than who triggered the run, and no longer auto-merges GitHub Actions updates, which run with release credentials.
 ### Fixed
+- **Processes graphlm starts no longer inherit its API keys.** `git` (for the commit stamp) and the installers run by `--upgrade` / `--setup` received the full environment, including `GRAPHLM_API_KEY` and `TYPESAFE_API_KEY` loaded from your config. They now get the environment without graphlm's own variables; proxies and pip/uv settings still pass through.
+- **A readable config file is called out.** When `~/.config/graphlm/.env` (which holds API keys) is readable by other users, graphlm now warns and suggests `chmod 600`.
 - **A scan can no longer hang, exhaust memory or crash on a hostile tree.** A named pipe (FIFO) in the scanned directory blocked the scan forever, because every non-directory entry was opened as a file; only regular files are read now, and sockets, device nodes and broken symlinks are skipped too. Files were read whole before being cut to `--max-file-chars`, so a multi-gigabyte log or dump cost its full size in memory; reads now stop at 4 MiB (the line count used for cycle risk is still exact), and a file past that is sent as its head. A directory tree nested more than about 1,000 levels deep crashed the scan with a `RecursionError`; the walk no longer recurses. On Python 3.11 and 3.12, a symlink loop (`a.py → b.py → a.py`) in the project crashed the scan; loops are now skipped like broken links.
 - **Files and directories whose names contain a newline or other control character are skipped.** No real project needs such names, and they garbled the directory tree.
 - **A symlink can no longer read a file you excluded by path.** With `deploy/prod.yaml` (or `secrets/*.yaml`) in `--exclude` or `.graphlmignore`, a link elsewhere in the project pointing at that file still had its contents sent to the model. Link targets are now matched exactly like the files the scan walks. This also fixes the opposite mistake: when the project itself sat inside a directory named like an exclude (`build/`, `dist/`, `env/`, …), every symlinked file in it was silently dropped.
@@ -31,6 +25,12 @@ and this project adheres to Semantic Versioning.
 - **A long chain of imports can no longer crash the run after both LLM calls.** Cycle detection recursed once per file on a path; with `--no-ast`, a model reply describing a chain of a few thousand imports raised `RecursionError` and discarded the paid graph. Detection is now iterative, with identical results, and a failure in it keeps the graph and says in the map that cycles were not computed.
 - **Text from the scanned repository can no longer change the structure of `GRAPH.md`.** File names and model-written descriptions, notes, paths and symbol names were written into the map as raw Markdown, so a hostile repository could add headings, images that load a remote URL when the map is viewed, links or HTML to a document coding agents read. Every renderer now escapes such text; ordinary maps are unchanged byte for byte.
 - **The map now says what it is.** `GRAPH.md`, the installed agent skill and the `--serve` MCP instructions state that the map's text comes from the repository and must be treated as data, never as instructions, and the skill tells agents to regenerate a map that came committed with a clone. Re-run `graphlm --install-skill <harness> --skill-force` to update an installed skill.
+
+### Docs
+- `--api-key` help now recommends the environment variable or config file, since a key on the command line is visible in `ps` and shell history. The `--serve` docs no longer claim the server never uses the network: `search` calls the TypeSafe API when a TypeSafe key is configured. Removed a private hostname and a local path from two planning documents.
+
+### Infrastructure
+- **Release and CI workflows are harder to tamper with.** Every GitHub Action is pinned to a full commit SHA instead of a movable tag or branch. The release build refuses a `v*` tag that is not on `main`. Dependabot auto-merge now checks who opened the pull request rather than who triggered the run, and no longer auto-merges GitHub Actions updates, which run with release credentials.
 
 ## [0.7.1] - 2026-11-17
 
