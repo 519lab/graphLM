@@ -11,7 +11,8 @@ from pathlib import Path
 from graphlm.exclusions import _ALWAYS_EXCLUDE, _should_exclude
 from graphlm.bounded_read import read_bytes_bounded, read_text_bounded
 from graphlm.limits import MAX_SOURCE_READ
-from graphlm.redact import _is_sensitive_file, _redact_secrets
+from graphlm.redact import _redact_secrets
+from graphlm.sensitive_files import _is_sensitive_file
 from graphlm.scan_guards import (
     _is_nested_checkout,
     _path_is_inside,

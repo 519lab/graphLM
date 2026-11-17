@@ -33,7 +33,8 @@ from graphlm.scan_guards import (
     _symlink_hides_sensitive,
     load_graphlmignore,
 )
-from graphlm.redact import _is_sensitive_file, _redact_secrets
+from graphlm.redact import _redact_secrets
+from graphlm.sensitive_files import _is_sensitive_file
 from graphlm.testpaths import is_test_path
 
 FIXTURES = Path(__file__).parent / "fixtures"

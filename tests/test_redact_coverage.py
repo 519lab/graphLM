@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from graphlm.redact import _is_sensitive_file, _redact_secrets
+from graphlm.redact import _redact_secrets
+from graphlm.sensitive_files import _is_sensitive_file
 from graphlm.scanner import scan_project
 
 # (case id, input, a substring of the secret that must not survive)
@@ -57,6 +58,11 @@ LEAKS = [
     ("netrc_line", "machine x login u password Zx9kQ2mP7vL4", "Zx9kQ2mP7vL4"),
     ("npm_authtoken", "//registry.npmjs.org/:_authToken=Zx9kQ2mP7vL4", "Zx9kQ2mP7vL4"),
     ("npm_auth", "_auth = Zx9kQ2mP7vL4", "Zx9kQ2mP7vL4"),
+    ("js_template_literal", "const password = `Zx9kQ2mP7vL4`;", "Zx9kQ2mP7vL4"),
+    ("js_template_token", "const apiToken = `Zx9kQ2mP7vL4`;", "Zx9kQ2mP7vL4"),
+    ("yaml_block_crlf", "secret: |\r\n  Zx9kQ2mP7vL4\r\n", "Zx9kQ2mP7vL4"),
+    ("unterminated_triple", 'password = """Zx9kQ2mP7vL4', "Zx9kQ2mP7vL4"),
+    ("netrc_indented", "  machine x login u password Zx9kQ2mP7vL4", "Zx9kQ2mP7vL4"),
     ("slack_webhook", "https://hooks.slack.com/services/T0001/B0002/Zx9kQ2mP7vL4", "Zx9kQ2mP7vL4"),
     (
         "pgp_block",
@@ -124,7 +130,24 @@ SAFE = [
     "credit_card = 'visa1234x'",
     "git push -u origin main",
     "docker run -u 1000:1000 img",
+    "the machine run password check",
+    "curl -u $USER:$PASS https://x",
+    "Authorization: token auth_flow_description",
+    'token = f"{prefix}-{id}-1"',
+    'pwd = "/home/user1/work"',
+    "const password = `${process.env.PW}`;",
 ]
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ('password = """Zx9kQ2mP7vL4"""', 'password = """[REDACTED:PASSWORD]"""'),
+        ("password = \'\'\'Zx9kQ2mP7vL4\'\'\'", "password = \'\'\'[REDACTED:PASSWORD]\'\'\'"),
+    ],
+)
+def test_triple_quotes_keep_their_shape(text, expected):
+    assert _redact_secrets(text) == expected
 
 
 @pytest.mark.parametrize("case,text,secret", LEAKS, ids=[c[0] for c in LEAKS])
@@ -170,6 +193,10 @@ def test_original_markers_are_stable():
         ":_authToken=",
         "secret_name_",
         "password = a.",
+        "password = `",
+        "secret: |\r\n",
+        'password = """x\n',
+        "machine ",
     ],
 )
 def test_redaction_is_linear_on_adversarial_input(unit):
