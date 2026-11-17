@@ -22,3 +22,12 @@ Rich, via ``httpx._main``) for every ``import graphlm``, ``--help``, and
 # (vLLM max_model_len, Anthropic) do bound prompt+generation together; anyone on
 # such an endpoint lowers this via the flag.
 LLM_MAX_OUTPUT_TOKENS = 128000
+
+# Most characters (scanner, text mode) or bytes (AST pass) graphlm reads from
+# one scanned file. Files are untrusted input: without a bound, a multi-GB log
+# or dump in the tree is read whole just to keep its first ``max_file_chars``
+# (a 300 MB CSV peaked at ~600 MB RSS). 4 MiB holds any hand-written source
+# file whole, so the skeleton and the import edges still see all of it; past
+# the bound the scanner keeps the head (no skeleton) and the AST pass parses
+# the prefix. The physical line count is still exact: the rest is streamed.
+MAX_SOURCE_READ = 4 * 1024 * 1024
