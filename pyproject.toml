@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "graphlm"
-version = "0.7.2"
+dynamic = ["version"]
 description = "Generate codebase graphs (Markdown + JSON + interactive HTML) from any project directory using an OpenAI-compatible LLM"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -104,31 +104,9 @@ exclude = ["/.claude"]
 [tool.hatch.build.targets.wheel]
 packages = ["graphlm"]
 
-# Release preparation: `uvx bump-my-version bump patch|minor|major`
-# Bumps project.version (auto — config lives here), promotes the CHANGELOG's
-# [Unreleased] section to a dated release header, and updates the compare links.
-# Commit/tag stay disabled so PR CI gates the release commit before a maintainer
-# creates and pushes the publishing tag. See CONTRIBUTING.md for the full flow.
-# NOTE: keep current_version in step with project.version above.
-[tool.bumpversion]
-current_version = "0.7.2"
-commit = false
-tag = false
-allow_dirty = false
-
-# CHANGELOG: insert a dated release header below the permanent [Unreleased]
-# heading (we keep [Unreleased], we don't rename it).
-[[tool.bumpversion.files]]
-filename = "CHANGELOG.md"
-search = "## [Unreleased]"
-replace = """## [Unreleased]
-
-## [{new_version}] - {utcnow:%Y-%m-%d}"""
-
-# CHANGELOG: rewrite the Unreleased compare link to the new version AND add the
-# new version's own compare link, in one replacement (order-independent).
-[[tool.bumpversion.files]]
-filename = "CHANGELOG.md"
-search = "[Unreleased]: https://github.com/519lab/graphLM/compare/v{current_version}...HEAD"
-replace = """[Unreleased]: https://github.com/519lab/graphLM/compare/v{new_version}...HEAD
-[{new_version}]: https://github.com/519lab/graphLM/compare/v{current_version}...v{new_version}"""
+# The version is the changelog's top released section (`## [X.Y.Z] - date`), the
+# same section the release workflow tags, so the wheel and the tag cannot
+# disagree. `[Unreleased]` never matches. See ADR-020 and CONTRIBUTING.md.
+[tool.hatch.version]
+path = "CHANGELOG.md"
+pattern = '^## \[(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\]'
