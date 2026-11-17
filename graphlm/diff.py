@@ -33,6 +33,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
+from graphlm.md_safe import md_code, md_text
 from graphlm.models import (
     GRAPH_META_SCHEMA_VERSION,
     CodebaseGraph,
@@ -157,27 +158,27 @@ class GraphDiff:
 
 def _fmt_edge(e) -> str:
     # key: (from_path, to_path, kind)
-    return f"`{e.from_path}` -> `{e.to_path}` ({e.kind})"
+    return f"{md_code(e.from_path)} -> {md_code(e.to_path)} ({md_text(e.kind)})"
 
 
 def _fmt_module(m) -> str:
     # key: path
-    return f"`{m.path}`"
+    return md_code(m.path)
 
 
 def _fmt_data_flow(d) -> str:
     # key: (source, destination)
-    return f"{d.source} -> {d.destination}"
+    return f"{md_text(d.source)} -> {md_text(d.destination)}"
 
 
 def _fmt_entry_point(e) -> str:
     # key: (path, name)
-    return f"`{e.path}` :: `{e.name}`"
+    return f"{md_code(e.path)} :: {md_code(e.name)}"
 
 
 def _fmt_file_summary(f) -> str:
     # key: path
-    return f"`{f.path}`"
+    return md_code(f.path)
 
 
 def _fmt_cycle(c) -> str:
@@ -186,7 +187,7 @@ def _fmt_cycle(c) -> str:
     # regardless of the order the producer listed them (AST cycles are already
     # sorted in cycles.py, but LLM-emitted `import_cycles` need not be) — keeps
     # GRAPH_DIFF.* byte-deterministic.
-    return " ↔ ".join(f"`{n}`" for n in sorted(c.nodes))
+    return " ↔ ".join(md_code(n) for n in sorted(c.nodes))
 
 
 def _diff_by_key(old_items, new_items, key_fn, fmt_fn) -> DimensionDiff:

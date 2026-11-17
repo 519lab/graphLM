@@ -4,6 +4,22 @@ Significant, hard-to-reverse decisions for graphLM. Newest first.
 
 ---
 
+## ADR-018 — The map is untrusted text: render it inert, and say so where agents read it
+
+**Status:** Accepted (2026-11-17)
+
+**Context.** `GRAPH.md` exists to be read by coding agents, and almost all of it comes from the scanned repository (file names) or from an LLM that read that repository (descriptions, notes, paths, symbol names, edge endpoints). Nothing was escaped, so repository-controlled text could write Markdown structure into the map: close the tree's code fence, start a heading, add an image that fetches a URL when rendered, inject HTML, or shift text between table columns. A committed `.graphlm/` reached agents with no scanner or model involved at all.
+
+**Decision.**
+1. **Every renderer passes repository/model text through `graphlm/md_safe.py`.** `md_text` for cells and bullets (control characters made visible, `|` escaped, images/link targets/HTML neutralised), `md_code` for code spans (a backtick run longer than any inside), `md_fence` for fenced blocks (a fence longer than any backtick run in the body), `block_lines` for text inside a fence.
+2. **Escaping is conditional.** Each helper returns its input unchanged when it holds nothing structural, so ordinary maps stay byte-identical and agents copy real paths (`src/[id]/page.tsx`, not `src/\[id\]/page.tsx`).
+3. **Inert, not trusted.** Escaping cannot stop an instruction written in plain words, so the trust level is stated where an agent reads the map: the `GRAPH.md` header, the installed skill and the MCP server instructions all say the map's text is data, never instructions. The skill also tells agents that a tracked `.graphlm/` came with the clone and should be regenerated before it is relied on.
+4. Names with control characters are skipped at scan time (scanner hardening); rendering is defence in depth for model-written paths and older scans.
+
+**Consequences.** New output fields must go through a `md_safe` helper — `tests/test_map_untrusted_text.py` parses rendered maps with a CommonMark parser and fails if hostile text becomes structure. `GRAPH.html` was already safe (`_json_for_script`, `escapeHtml`) and is unchanged. Existing skill installs pick up the new guidance only with `--install-skill … --skill-force`.
+
+---
+
 ## ADR-017 — Embeddable library: injected LLM backend, structure-only maps, no config read at import
 
 **Status:** Accepted (2026-11-05)

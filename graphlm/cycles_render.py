@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from graphlm.md_safe import md_code
 from graphlm.models import Cycle
 
 _JS_CYCLE_EXTS = frozenset({".js", ".jsx", ".ts", ".tsx"})
@@ -98,6 +99,6 @@ def _render_cycle_group(cycles: list[Cycle], heading: str, level: int) -> list[s
         lines.append(f"{hashes} {heading} {i + 1} (risk score: {cycle.risk_score:.1f})")
         lines.append(label)
         for node in cycle.nodes:
-            lines.append(f"- `{node}`")
+            lines.append(f"- {md_code(node)}")
         lines.append("")
     return lines

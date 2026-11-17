@@ -13,6 +13,7 @@ renders exactly as before.
 from __future__ import annotations
 
 from graphlm.degree import top_fan_in
+from graphlm.md_safe import md_code
 from graphlm.models import CodebaseGraph
 
 _MAX_ENTRY_POINTS = 6
@@ -33,7 +34,7 @@ def render_orientation(
     entry_points = sorted(graph.entry_points, key=lambda e: (e.path, e.name))
     if entry_points:
         shown = entry_points[:_MAX_ENTRY_POINTS]
-        named = ", ".join(f"`{e.path}::{e.name}`" for e in shown)
+        named = ", ".join(md_code(f"{e.path}::{e.name}") for e in shown)
         extra = len(entry_points) - len(shown)
         suffix = f" (+{extra} more)" if extra > 0 else ""
         items.append(f"- **Entry points:** {named}{suffix}")
@@ -50,7 +51,7 @@ def render_orientation(
 
     hubs = top_fan_in(graph, limit=_MAX_FAN_IN)
     if hubs:
-        named = ", ".join(f"`{p}` ({n})" for p, n in hubs)
+        named = ", ".join(f"{md_code(p)} ({n})" for p, n in hubs)
         items.append(
             f"- **Most imported (blast radius):** {named}"
         )
