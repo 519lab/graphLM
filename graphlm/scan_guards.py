@@ -7,7 +7,7 @@ that is really another git checkout, project containment, and the ignore-file
 reader (which is a safe file read — it rejects an escaping symlink and never
 raises — not a pattern matcher, so it lives here beside ``_path_is_inside``).
 
-Imports `exclusions` (`_ALWAYS_EXCLUDE`) and `redact` (`_is_sensitive_file`);
+Imports `exclusions` (`_ALWAYS_EXCLUDE`) and `sensitive_files` (`_is_sensitive_file`);
 `scanner → scan_guards → exclusions → freshness → models` has no cycle.
 """
 
@@ -17,7 +17,7 @@ import logging
 from pathlib import Path
 
 from graphlm.exclusions import _ALWAYS_EXCLUDE, _should_exclude
-from graphlm.redact import _is_sensitive_file
+from graphlm.sensitive_files import _is_sensitive_file
 
 logger = logging.getLogger(__name__)
 
