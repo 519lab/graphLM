@@ -141,10 +141,13 @@ and the release workflow tags exactly that section.
    **Merging it is the decision to release.** If `develop` moves first, the same
    pull request is updated with the new entries and version.
 3. With nothing left to roll, `promote` opens the develop → main promotion pull
-   request. Its `Release / Tag & GitHub Release` check is a dry run that fails
-   if the changelog is not ready (entries left under `[Unreleased]`, no dated
-   section, or a version not newer than the latest tag). Merge it as a merge
-   commit (never squash).
+   request. The `Release` workflow runs on it. Its tag job is a dry run that
+   goes red if the changelog is not ready (entries left under `[Unreleased]`, no
+   dated section, or a version not newer than the latest tag). Its build job
+   builds the merge commit, checks the version, and smoke-tests the wheel.
+   These checks are not required by the `main` ruleset, so **don't merge while
+   either is red**: the merge creates the tag, and a broken release can only be
+   fixed with a new version. Merge it as a merge commit (never squash).
 4. The push to `main` runs `.github/workflows/release.yml`. It creates the tag
    `vX.Y.Z` and a GitHub Release whose notes are that changelog section, builds
    the tagged commit, checks that the wheel and sdist carry `X.Y.Z`, smoke-tests

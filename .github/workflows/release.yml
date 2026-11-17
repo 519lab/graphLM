@@ -6,8 +6,10 @@ name: Release
 #                  `## [X.Y.Z] - date` section; if vX.Y.Z has no tag yet it creates
 #                  the tag and a GitHub Release whose notes are that section. On the
 #                  promotion pull request it only validates (dry run), so a
-#                  promotion whose changelog is not ready fails before the merge.
-#   build          builds the tagged commit once and smoke-tests the wheel.
+#                  promotion whose changelog is not ready shows red before the merge.
+#   build          builds the tagged commit once and smoke-tests the wheel. It
+#                  also runs on the promotion pull request, so a broken wheel is
+#                  caught before the merge creates the tag.
 #   github-release attaches the artifacts to that release.
 #   pypi-publish   publishes the same artifacts via Trusted Publishing (OIDC).
 #
@@ -20,6 +22,8 @@ name: Release
 # A manual run (workflow_dispatch) skips the tag job and publishes to TestPyPI
 # instead, so the Trusted-Publishing path can be rehearsed without burning the
 # real name/version. No run re-executes the test matrix: ci.yml gates the commit.
+# Assets are uploaded after the tag job creates the release, which requires the
+# repository's "immutable releases" setting to stay off (ADR-020).
 
 on:
   push:
@@ -56,14 +60,21 @@ jobs:
   build:
     name: Build & smoke-test
     needs: tag
+    # Also on the promotion pull request, so a wheel that would fail its smoke
+    # test is caught before the merge creates a tag and a release that cannot
+    # be fixed without a new version.
     if: >-
-      !cancelled() &&
-      (github.event_name == 'workflow_dispatch' || needs.tag.outputs.released == 'true')
+      !cancelled() && (
+        github.event_name == 'workflow_dispatch' ||
+        (needs.tag.result == 'success' &&
+         (github.event_name == 'pull_request' || needs.tag.outputs.released == 'true')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.tag.outputs.tag || github.sha }}
+          # The tag on a release; the pull request's merge commit (what main
+          # will become) on the promotion pull request; the branch on a manual run.
+          ref: ${{ needs.tag.outputs.released == 'true' && needs.tag.outputs.tag || github.sha }}
           fetch-depth: 0 # the main-ancestry check below needs main's history
 
       # A release must come from main. The tag job only runs on a push to main,
@@ -95,8 +106,10 @@ jobs:
 
       # The version comes from CHANGELOG.md's top section (pyproject `dynamic`),
       # the same section the tag job tagged. Fail loudly if they ever disagree.
+      # Also on the promotion pull request: the dry run reports the version it
+      # would tag.
       - name: Verify the built version matches the tag
-        if: needs.tag.outputs.released == 'true'
+        if: needs.tag.outputs.version != ''
         env:
           VERSION: ${{ needs.tag.outputs.version }}
         run: |

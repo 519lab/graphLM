@@ -17,13 +17,15 @@ Significant, hard-to-reverse decisions for graphLM. Newest first.
    - The shared release job tags the top section and creates the GitHub Release.
    - Build, artifact upload and PyPI publish are chained to it with `needs:` in the same file. That also keeps PyPI Trusted Publishing bound to `release.yml` + environment `pypi`.
    - The build fails if the wheel or sdist version is not the tagged version.
-   - On the promotion PR the tag job is a dry run.
+   - On the promotion PR the tag job is a dry run, and the build and smoke test also run (on the merge commit). The tag is created before the release build, so this is the only point where a broken wheel can be caught without spending a version.
 4. Shared workflows are pinned by commit SHA with the version in a comment.
 
 **Consequences.**
 - Every promotion is a release: a promotion with nothing to release fails its check, so a change meant to ship needs a changelog entry, CI-only changes included.
 - Release tags are lightweight and unsigned (created through the API by the workflow). The signed commits and merges that lead to them are the record. `v0.7.0` was the last signed tag.
 - A failed publish after tagging is recovered with "Re-run failed jobs", never by re-tagging.
+- The release checks on the promotion PR are advisory until they are made required status checks on `main`. The `main` ruleset requires none today.
+- Assets are uploaded to the release after it is created, so the repository's "immutable releases" setting must stay off. It is off (`enabled: false`, not enforced by the org) as of 2026-11-17.
 - `uv.lock` records the root version as dynamic, so a release no longer touches it.
 
 ---
