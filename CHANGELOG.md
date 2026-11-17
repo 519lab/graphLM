@@ -7,6 +7,8 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-17
+
 ### Changed
 - **`GRAPH.html` now loads one exact, integrity-checked build of D3 and runs no other script.** It used a floating `d3.v7` URL with no integrity check, so whoever controlled that URL could run script in every generated graph page. The page now loads `d3@7.9.2` from jsDelivr with a Subresource Integrity hash, and a Content-Security-Policy allows only that file and the page's own inline script (by hash). The page still needs network access to draw the graph.
 
@@ -23,9 +25,9 @@ and this project adheres to Semantic Versioning.
 - **`--install-skill --skill-local` no longer writes outside the project through a symlinked `.claude` directory.** It refused a symlink only at the final file, so a repository whose `.claude` (or `.claude/skills/graphlm`) was a link could make it create or, with `--skill-force`, overwrite a `SKILL.md` elsewhere. It now refuses a symlink anywhere between the project and the file, using the same check as map output. User-global installs are unchanged.
 - **The LLM request is never redirected elsewhere.** The client followed HTTP redirects, so an endpoint answering with a redirect to another server had the full prompt — your source code — re-sent there (the API key was not forwarded). Redirects now stop the run with an error naming the target, so you can point `GRAPHLM_BASE_URL` at the final URL. A plain `http://` endpoint that is not on this machine now logs a warning that the key and code travel unencrypted.
 - **A long chain of imports can no longer crash the run after both LLM calls.** Cycle detection recursed once per file on a path; with `--no-ast`, a model reply describing a chain of a few thousand imports raised `RecursionError` and discarded the paid graph. Detection is now iterative, with identical results, and a failure in it keeps the graph and says in the map that cycles were not computed.
-- **Text from the scanned repository can no longer change the structure of `GRAPH.md`.** File names and model-written descriptions, notes, paths and symbol names were written into the map as raw Markdown, so a hostile repository could add headings, images that load a remote URL when the map is viewed, links or HTML to a document coding agents read. Every renderer now escapes such text; ordinary maps are unchanged byte for byte.
+- **Security: text from the scanned repository can no longer change the structure of `GRAPH.md`.** File names and model-written descriptions, notes, paths and symbol names were written into the map as raw Markdown, so a hostile repository could add headings, images that load a remote URL when the map is viewed, links or HTML to a document coding agents read. Every renderer now escapes such text; ordinary maps are unchanged byte for byte.
 - **The map now says what it is.** `GRAPH.md`, the installed agent skill and the `--serve` MCP instructions state that the map's text comes from the repository and must be treated as data, never as instructions, and the skill tells agents to regenerate a map that came committed with a clone. Re-run `graphlm --install-skill <harness> --skill-force` to update an installed skill.
-- **File content can no longer imitate the prompt's own sections.** Each file sent to the model was framed with a fixed Markdown header and code fence, so a file could close its own block and add text that looked exactly like graphlm's sections — another file, or the "ground truth" import table the model is told to trust. Files and the directory tree are now wrapped in tags carrying a random value chosen for each run, the model is told that only those tags delimit files, and the real import table now comes before the files.
+- **Security: file content can no longer imitate the prompt's own sections.** Each file sent to the model was framed with a fixed Markdown header and code fence, so a file could close its own block and add text that looked exactly like graphlm's sections — another file, or the "ground truth" import table the model is told to trust. Files and the directory tree are now wrapped in tags carrying a random value chosen for each run, the model is told that only those tags delimit files, and the real import table now comes before the files.
 
 ### Docs
 - `--api-key` help now recommends the environment variable or config file, since a key on the command line is visible in `ps` and shell history. The `--serve` docs no longer claim the server never uses the network: `search` calls the TypeSafe API when a TypeSafe key is configured. Removed a private hostname and a local path from two planning documents.
@@ -427,7 +429,8 @@ First public release. graphlm is installable from PyPI (`uv tool install graphlm
 - mypy type checking in CI
 - Removed stale generated artifacts (`graphs.md`, `graphs.json`, `graph.html`) left over from before the `GRAPH.*` output rename, and the committed `.coverage` database; the repo no longer ships tool output. Added `.coverage`, `coverage.xml`, and the `GRAPH.*` output files to `.gitignore` so generated artifacts stay out of version control
 
-[Unreleased]: https://github.com/519lab/graphLM/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/519lab/graphLM/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/519lab/graphLM/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/519lab/graphLM/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/519lab/graphLM/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/519lab/graphLM/compare/v0.5.0...v0.6.0
