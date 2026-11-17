@@ -4,6 +4,32 @@ Significant, hard-to-reverse decisions for graphLM. Newest first.
 
 ---
 
+## ADR-020 — Releases are automatic: the changelog is the version, main is the trigger
+
+**Status:** Accepted (2026-11-17)
+
+**Context.** `release.yml` ran only on a pushed `v*` tag, so every release needed a maintainer to bump `pyproject.toml` with bump-my-version, re-lock, open a release-prep PR, promote, and then hand-tag `origin/main`. The other develop → main repos release through the shared `ggrace519/.github` workflows instead (`version` rolls the changelog, `release` tags `main`). graphLM had adopted only `promote`, so the expectation that releases happen automatically was not met. Two facts shape the adoption. A tag the shared `release` workflow creates with `GITHUB_TOKEN` starts no other workflow, so a tag-triggered publish never fires. And the shared workflows write only `CHANGELOG.md`, so a static `project.version` would drift from the tag.
+
+**Decision.**
+1. **The changelog is the version source.** `pyproject.toml` declares `dynamic = ["version"]`, and hatchling's regex source reads the first `## [X.Y.Z]` heading of `CHANGELOG.md`: the same section the release workflow tags. bump-my-version and its config are removed.
+2. **`promote.yml` runs `version` and then `promote`.** CI on develop opens a `chore(release): roll changelog into X.Y.Z` roll-up PR. Merging it is the decision to release. The promotion PR opens only once nothing is left to roll.
+3. **`release.yml` runs on every push to `main`.**
+   - The shared release job tags the top section and creates the GitHub Release.
+   - Build, artifact upload and PyPI publish are chained to it with `needs:` in the same file. That also keeps PyPI Trusted Publishing bound to `release.yml` + environment `pypi`.
+   - The build fails if the wheel or sdist version is not the tagged version.
+   - On the promotion PR the tag job is a dry run, and the build and smoke test also run (on the merge commit). The tag is created before the release build, so this is the only point where a broken wheel can be caught without spending a version.
+4. Shared workflows are pinned by commit SHA with the version in a comment.
+
+**Consequences.**
+- Every promotion is a release: a promotion with nothing to release fails its check, so a change meant to ship needs a changelog entry, CI-only changes included.
+- Release tags are lightweight and unsigned (created through the API by the workflow). The signed commits and merges that lead to them are the record. `v0.7.0` was the last signed tag.
+- A failed publish after tagging is recovered with "Re-run failed jobs", never by re-tagging.
+- The release checks on the promotion PR are advisory until they are made required status checks on `main`. The `main` ruleset requires none today.
+- Assets are uploaded to the release after it is created, so the repository's "immutable releases" setting must stay off. It is off (`enabled: false`, not enforced by the org) as of 2026-11-17.
+- `uv.lock` records the root version as dynamic, so a release no longer touches it.
+
+---
+
 ## ADR-019 — Prompt structure: per-run random boundaries around repository text
 
 **Status:** Accepted (2026-11-17)
@@ -13,8 +39,8 @@ Significant, hard-to-reverse decisions for graphLM. Newest first.
 **Decision.**
 1. The tree and every pass-2 file are delimited by tags carrying a per-run random boundary (`secrets.token_hex(8)`): `<directory_tree id="B">…</directory_tree id="B">`, `<file path="…" id="B">…</file id="B">`. Content written before the run cannot contain the closing tag. The instruction block names the boundary and says anything inside a block — headings, tables, other tags — is that file's text.
 2. The parser's edge table is placed before the source files and is itself delimited (`<edge_table id="B">`): its endpoints come from string literals in the scanned files (PHP `require`, JS `import`), so a row can carry a newline and a forged section. Rows show control characters as escapes and escape `|` (`_cell`).
-4. The prompt names the authoritative tag form in its opening lines, before any repository text, so a model meets the rule before any forged tag.
-3. The path attribute is escaped; the boundary is injectable (`boundary=`) so prompt tests stay deterministic. It is fixed-length, so token estimates do not depend on which value was drawn.
+3. The prompt names the authoritative tag form in its opening lines, before any repository text, so a model meets the rule before any forged tag.
+4. The path attribute is escaped; the boundary is injectable (`boundary=`) so prompt tests stay deterministic. It is fixed-length, so token estimates do not depend on which value was drawn.
 
 **Consequences.** The model can still be *persuaded* by file content — that is what the data-only instruction and ADR-018's inert rendering address — but it can no longer be shown forged prompt structure. Tests: `tests/test_prompt_delimiting.py`.
 

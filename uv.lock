@@ -414,7 +414,6 @@ wheels = [
 
 [[package]]
 name = "graphlm"
-version = "0.7.2"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -477,32 +476,34 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "graphlm", extras = ["cpp"], marker = "extra == 'all'" },
-    { name = "graphlm", extras = ["csharp"], marker = "extra == 'all'" },
-    { name = "graphlm", extras = ["go"], marker = "extra == 'all'" },
-    { name = "graphlm", extras = ["java"], marker = "extra == 'all'" },
-    { name = "graphlm", extras = ["js"], marker = "extra == 'all'" },
-    { name = "graphlm", extras = ["php"], marker = "extra == 'all'" },
-    { name = "graphlm", extras = ["rust"], marker = "extra == 'all'" },
     { name = "httpx" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2,<3" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "python-dotenv" },
     { name = "tree-sitter", specifier = ">=0.26.0,<0.27" },
+    { name = "tree-sitter-c", marker = "extra == 'all'", specifier = ">=0.23,<0.25" },
     { name = "tree-sitter-c", marker = "extra == 'cpp'", specifier = ">=0.23,<0.25" },
+    { name = "tree-sitter-c-sharp", marker = "extra == 'all'", specifier = ">=0.23,<0.24" },
     { name = "tree-sitter-c-sharp", marker = "extra == 'csharp'", specifier = ">=0.23,<0.24" },
+    { name = "tree-sitter-cpp", marker = "extra == 'all'", specifier = ">=0.23,<0.24" },
     { name = "tree-sitter-cpp", marker = "extra == 'cpp'", specifier = ">=0.23,<0.24" },
+    { name = "tree-sitter-go", marker = "extra == 'all'", specifier = ">=0.23,<0.26" },
     { name = "tree-sitter-go", marker = "extra == 'go'", specifier = ">=0.23,<0.26" },
+    { name = "tree-sitter-java", marker = "extra == 'all'", specifier = ">=0.23,<0.24" },
     { name = "tree-sitter-java", marker = "extra == 'java'", specifier = ">=0.23,<0.24" },
+    { name = "tree-sitter-javascript", marker = "extra == 'all'", specifier = ">=0.25,<0.26" },
     { name = "tree-sitter-javascript", marker = "extra == 'js'", specifier = ">=0.25,<0.26" },
+    { name = "tree-sitter-php", marker = "extra == 'all'", specifier = ">=0.23,<0.26" },
     { name = "tree-sitter-php", marker = "extra == 'php'", specifier = ">=0.23,<0.26" },
     { name = "tree-sitter-python", specifier = ">=0.25.0,<0.26" },
+    { name = "tree-sitter-rust", marker = "extra == 'all'", specifier = ">=0.24,<0.25" },
     { name = "tree-sitter-rust", marker = "extra == 'rust'", specifier = ">=0.24,<0.25" },
+    { name = "tree-sitter-typescript", marker = "extra == 'all'", specifier = ">=0.23,<0.24" },
     { name = "tree-sitter-typescript", marker = "extra == 'js'", specifier = ">=0.23,<0.24" },
     { name = "typer" },
     { name = "typesafe-sdk", marker = "extra == 'typesafe'", specifier = ">=0.7,<0.8" },
 ]
-provides-extras = ["mcp", "js", "java", "rust", "csharp", "cpp", "go", "php", "typesafe", "all"]
+provides-extras = ["all", "cpp", "csharp", "go", "java", "js", "mcp", "php", "rust", "typesafe"]
 
 [package.metadata.requires-dev]
 dev = [

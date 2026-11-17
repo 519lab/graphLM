@@ -1,24 +1,35 @@
 name: Release
 
-# Publishes graphlm to PyPI *and* a GitHub Release from one git tag.
+# Releases graphlm automatically when a promotion lands on main (ADR-020):
 #
-# Maintainer procedure: prepare the version on a release branch, merge it only
-# after PR/main CI, then create, verify, and push one signed tag. See the
-# "Releasing (maintainers)" section in CONTRIBUTING.md for the exact commands.
+#   tag            the shared release workflow reads CHANGELOG.md's top
+#                  `## [X.Y.Z] - date` section; if vX.Y.Z has no tag yet it creates
+#                  the tag and a GitHub Release whose notes are that section. On the
+#                  promotion pull request it only validates (dry run), so a
+#                  promotion whose changelog is not ready shows red before the merge.
+#   build          builds the tagged commit once and smoke-tests the wheel. It
+#                  also runs on the promotion pull request, so a broken wheel is
+#                  caught before the merge creates the tag.
+#   github-release attaches the artifacts to that release.
+#   pypi-publish   publishes the same artifacts via Trusted Publishing (OIDC).
 #
-# The tag drives everything: build once, smoke-test the built wheel in a clean
-# venv, attach the artifacts to a GitHub Release, and publish the same artifacts
-# to PyPI via Trusted Publishing (OIDC — no stored API token).
+# Everything is chained in this one workflow on purpose: a tag created with
+# GITHUB_TOKEN starts no other workflow, so a separate `on: push: tags` job would
+# never fire. PyPI's trusted publisher is bound to this file name and the `pypi`
+# environment; keep both. If a publish step fails after the tag exists, use
+# "Re-run failed jobs": the tag job's outputs are kept.
 #
-# A manual run (workflow_dispatch) publishes to TestPyPI instead, so the whole
-# Trusted-Publishing path can be rehearsed without burning the real name/version.
-# This does NOT re-run the test matrix — the push/PR CI (ci.yml) already gates
-# the commit on 3-version pytest + mypy.
+# A manual run (workflow_dispatch) skips the tag job and publishes to TestPyPI
+# instead, so the Trusted-Publishing path can be rehearsed without burning the
+# real name/version. No run re-executes the test matrix: ci.yml gates the commit.
+# Assets are uploaded after the tag job creates the release, which requires the
+# repository's "immutable releases" setting to stay off (ADR-020).
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       target:
@@ -32,27 +43,52 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  tag:
+    name: Tag & GitHub Release
+    if: github.event_name != 'workflow_dispatch'
+    permissions:
+      contents: write # create the tag and the release
+    uses: ggrace519/.github/.github/workflows/release.yml@8217a8363cd8f8222471a39df2a0892e0fec2c00 # v2.0.0
+    with:
+      dry-run: ${{ github.event_name == 'pull_request' }}
+
   build:
     name: Build & smoke-test
+    needs: tag
+    # Also on the promotion pull request, so a wheel that would fail its smoke
+    # test is caught before the merge creates a tag and a release that cannot
+    # be fixed without a new version.
+    if: >-
+      !cancelled() && (
+        github.event_name == 'workflow_dispatch' ||
+        (needs.tag.result == 'success' &&
+         (github.event_name == 'pull_request' || needs.tag.outputs.released == 'true')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0 # the tag check below needs main's history
+          # The tag on a release; the pull request's merge commit (what main
+          # will become) on the promotion pull request; the branch on a manual run.
+          ref: ${{ needs.tag.outputs.released == 'true' && needs.tag.outputs.tag || github.sha }}
+          fetch-depth: 0 # the main-ancestry check below needs main's history
 
-      # A release must come from main. Any account with write access can push
-      # a v* tag on any commit; this stops the build (and so both publish
-      # jobs, which need it) unless the tagged commit is already on main.
-      - name: Verify the tag is on main
-        if: startsWith(github.ref, 'refs/tags/v')
+      # A release must come from main. The tag job only runs on a push to main,
+      # so this holds by construction; keep the check so a future trigger
+      # change cannot publish a commit main does not contain.
+      - name: Verify the release commit is on main
+        if: needs.tag.outputs.released == 'true'
         run: |
           set -euo pipefail
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main. Tag a commit of origin/main."
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$(git rev-parse --short HEAD) is not on main."
             exit 1
           fi
-          echo "$GITHUB_REF_NAME is on main."
+          echo "$(git rev-parse --short HEAD) is on main."
 
       - name: Set up uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -67,6 +103,22 @@ jobs:
 
       - name: Build sdist and wheel
         run: uv build --out-dir dist
+
+      # The version comes from CHANGELOG.md's top section (pyproject `dynamic`),
+      # the same section the tag job tagged. Fail loudly if they ever disagree.
+      # Also on the promotion pull request: the dry run reports the version it
+      # would tag.
+      - name: Verify the built version matches the tag
+        if: needs.tag.outputs.version != ''
+        env:
+          VERSION: ${{ needs.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          for f in "dist/graphlm-${VERSION}-py3-none-any.whl" "dist/graphlm-${VERSION}.tar.gz"; do
+            [ -f "$f" ] || { echo "::error::expected $f; built: $(ls dist)"; exit 1; }
+          done
+          echo "dist/ matches v${VERSION}."
+
 
       # The check the test suite can't do: install the *built wheel* into a
       # fresh venv (never .venv) and run it. This catches a missing entry point,
@@ -99,37 +151,33 @@ jobs:
           path: dist/
 
   github-release:
-    name: GitHub Release
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    name: Attach artifacts to the release
+    needs: [tag, build]
+    if: >-
+      !cancelled() && needs.build.result == 'success' &&
+      needs.tag.outputs.released == 'true'
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create the release + upload assets
+      contents: write # upload release assets
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Download build artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dist
           path: dist/
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
-        with:
-          files: dist/*
-          generate_release_notes: true
-          body: |
-            graphlm ${{ github.ref_name }}
-
-            Install: `uv tool install graphlm` or `pipx install graphlm`
-            (or grab the wheel/sdist below). See the
-            [CHANGELOG](https://github.com/519lab/graphLM/blob/main/CHANGELOG.md)
-            for what's in this release.
+      - name: Upload to the release the tag job created
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
 
   pypi-publish:
     name: Publish to PyPI
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [tag, build]
+    if: >-
+      !cancelled() && needs.build.result == 'success' &&
+      needs.tag.outputs.released == 'true'
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -145,10 +193,13 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+
   testpypi-publish:
     name: Publish to TestPyPI
     needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    if: >-
+      !cancelled() && needs.build.result == 'success' &&
+      github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
     runs-on: ubuntu-latest
     environment:
       name: testpypi

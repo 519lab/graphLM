@@ -7,6 +7,11 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-17
+
+### Infrastructure
+- **Releases are now automatic.** Merging the develop → main promotion tags the release, creates the GitHub Release from this changelog, and publishes to PyPI, with no hand-made tag. The package version is now read from this file's top release section, so the published version and the tag always agree. Each release's tag is created by the release workflow and is no longer GPG-signed.
+
 ## [0.7.2] - 2026-11-17
 
 ### Changed
@@ -429,7 +434,6 @@ First public release. graphlm is installable from PyPI (`uv tool install graphlm
 - mypy type checking in CI
 - Removed stale generated artifacts (`graphs.md`, `graphs.json`, `graph.html`) left over from before the `GRAPH.*` output rename, and the committed `.coverage` database; the repo no longer ships tool output. Added `.coverage`, `coverage.xml`, and the `GRAPH.*` output files to `.gitignore` so generated artifacts stay out of version control
 
-[Unreleased]: https://github.com/519lab/graphLM/compare/v0.7.2...HEAD
 [0.7.2]: https://github.com/519lab/graphLM/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/519lab/graphLM/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/519lab/graphLM/compare/v0.6.0...v0.7.0
