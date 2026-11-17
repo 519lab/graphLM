@@ -26,7 +26,12 @@ def _copy_project(tmp_path: Path) -> Path:
     return project_copy
 
 
+_ARTIFACT_GLOB = {"--wheel": "*.whl", "--sdist": "*.tar.gz"}
+
+
 def _build(project: Path, out: Path, kind: str) -> Path:
+    """Build one artifact and return it. Selected by extension: uv also writes a
+    ``.gitignore`` into the output directory, and directory order is not stable."""
     subprocess.run(
         ["uv", "build", kind, "--out-dir", str(out)],
         cwd=project,
@@ -34,7 +39,8 @@ def _build(project: Path, out: Path, kind: str) -> Path:
         capture_output=True,
         text=True,
     )
-    return next(out.iterdir())
+    (artifact,) = out.glob(_ARTIFACT_GLOB[kind])
+    return artifact
 
 
 def test_version_is_the_changelogs_top_release_section(tmp_path: Path) -> None:
