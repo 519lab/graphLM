@@ -3,10 +3,14 @@
 ``graphlm --upgrade`` (a flag, not a subcommand — ADR-003) upgrades with the
 **same installer that put this binary on PATH**: ``uv tool install`` →
 ``uv tool upgrade``; ``uv pip install`` → ``uv pip install --upgrade``;
-pip → ``python -m pip install --upgrade``; pipx → ``pipx upgrade``. A source
+pip → ``python -P -m pip install --upgrade``; pipx → ``pipx upgrade``. A source
 checkout is refused: there is no PyPI install to bump.
 
 This module never uses a shell. The installer argv is a fixed list.
+
+The installer never runs in the caller's working directory (see
+:func:`_installer_cwd`): ``graphlm`` is usually invoked from inside the repo it
+maps, and that repo is untrusted input.
 """
 
 from __future__ import annotations
@@ -363,10 +367,34 @@ def make_plan(
     return UpgradePlan(
         installer="pip",
         extras=extras,
-        argv=(str(exe), "-m", "pip", "install", "--upgrade", spec),
+        # -P: don't put the cwd on sys.path (defence in depth beside the
+        # neutral cwd; requires-python >= 3.11 guarantees the flag exists).
+        argv=(str(exe), "-P", "-m", "pip", "install", "--upgrade", spec),
         current_version=version,
         message=f"Upgrading graphlm {version} via pip ({spec}).",
     )
+
+
+def _installer_cwd() -> Path:
+    """Working directory for every installer subprocess: never the caller's cwd.
+
+    The caller is usually standing in the repo graphlm maps — untrusted input —
+    and installers read it: ``python -m pip`` (and pipx, which runs it) imports
+    a local ``pip.py`` from the cwd, and ``uv pip`` reads ``uv.toml`` /
+    ``pyproject.toml`` from the cwd *or any parent* (e.g. a redirected
+    ``index-url``). The home directory is user-owned with root-owned parents,
+    so nothing found there is attacker-controlled, and the user's own uv
+    config still applies. A temp dir is *not* safe: uv's parent walk reaches
+    the world-writable system temp dir. Falls back to the filesystem root
+    when there is no usable home.
+    """
+    try:
+        home = Path.home()
+        if home.is_dir():
+            return home
+    except (RuntimeError, OSError):  # no HOME / unresolvable user
+        pass
+    return Path(os.path.abspath(os.sep))
 
 
 def run_upgrade(
@@ -383,5 +411,5 @@ def run_upgrade(
     if not plan.argv:
         return 2
     _echo("+ " + " ".join(plan.argv))
-    result = runner(list(plan.argv))
+    result = runner(list(plan.argv), cwd=_installer_cwd())
     return int(result.returncode)

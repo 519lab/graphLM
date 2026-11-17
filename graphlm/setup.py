@@ -26,6 +26,7 @@ from typing import Callable
 
 from graphlm.upgrade import (
     _abs_no_follow,
+    _installer_cwd,
     _spec,
     detect_installer,
     installed_extras,
@@ -188,7 +189,7 @@ def make_setup_plan(
         )
     return SetupPlan(
         installer, selected, combined,
-        (str(executable), "-m", "pip", "install", spec),
+        (str(executable), "-P", "-m", "pip", "install", spec),
         f"Installing {spec} via pip.",
     )
 
@@ -272,7 +273,7 @@ def run_setup(
         if plan.argv:
             _echo("+ " + " ".join(plan.argv))
             try:
-                result = runner(list(plan.argv))
+                result = runner(list(plan.argv), cwd=_installer_cwd())
                 rc = int(result.returncode)
             except Exception as e:  # installer tool blew up
                 _echo(f"Install command failed to run: {e}")
