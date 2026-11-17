@@ -273,6 +273,37 @@ def _read_streamed_completion(
     return StreamResult(content="".join(parts), usage=usage)
 
 
+_CLEARTEXT_WARNED: set[str] = set()
+_LOOPBACK_HOSTS = {"localhost", "::1", "[::1]"}
+
+
+def _is_loopback(host: str) -> bool:
+    host = host.lower()
+    return host in _LOOPBACK_HOSTS or host.startswith("127.") or host.endswith(".localhost")
+
+
+def _warn_if_cleartext(base_url: str) -> None:
+    """Warn (once per URL) when the endpoint is plain ``http`` off-machine.
+
+    The request carries the API key and the project's source code; over
+    ``http`` both cross the network unencrypted. Loopback is exempt (a local
+    model server). A warning, not an error: a trusted LAN may be deliberate.
+    """
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(base_url)
+    if parts.scheme.lower() != "http" or _is_loopback(parts.hostname or ""):
+        return
+    if base_url in _CLEARTEXT_WARNED:
+        return
+    _CLEARTEXT_WARNED.add(base_url)
+    logger.warning(
+        "GRAPHLM_BASE_URL %s uses plain http: the API key and your source code "
+        "are sent unencrypted. Use https unless this network is trusted.",
+        base_url,
+    )
+
+
 def call_llm(
     base_url: str,
     api_key: str,
@@ -326,6 +357,7 @@ def call_llm(
         timeout = _DEFAULT_TIMEOUT
 
     url = base_url.rstrip("/") + "/chat/completions"
+    _warn_if_cleartext(base_url)
 
     payload: dict[str, object] = {
         "model": model,
@@ -383,7 +415,12 @@ def call_llm(
         try:
             with httpx.Client(
                 timeout=timeout,
-                follow_redirects=True,
+                # Never follow a redirect: the request body is the prompt —
+                # the project's source. httpx drops the Authorization header
+                # on a cross-origin hop but re-sends the body, so a redirecting
+                # (or compromised) endpoint could forward the code anywhere.
+                # A base URL that redirects is a misconfiguration to surface.
+                follow_redirects=False,
                 limits=httpx.Limits(max_connections=1),
             ) as client:
                 with client.stream(
@@ -395,6 +432,15 @@ def call_llm(
                         # — GraphLLError propagates via the except clause below,
                         # so we don't burn minutes re-waiting on a hard failure.
                         response.read()
+                        if 300 <= response.status_code < 400:
+                            location = response.headers.get("location", "?")
+                            raise GraphLLErrorResponse(
+                                f"LLM endpoint redirected (HTTP "
+                                f"{response.status_code}) to {location}. graphlm "
+                                "does not follow redirects, so your source is "
+                                "only sent where you pointed it: set "
+                                "GRAPHLM_BASE_URL (or -b) to the final URL."
+                            )
                         detail = response.text[:500]
                         # Portability fallback: an endpoint that doesn't support
                         # response_format (or rejects the schema's $defs/anyOf)

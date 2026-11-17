@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from collections.abc import Iterable, Iterator, Mapping
 
 from graphlm.models import Cycle, ImportEdge
 from graphlm.scanner import FileFragment
@@ -24,46 +25,65 @@ def _norm_path(path: str) -> str:
     return path
 
 
-def _tarjan_scc(nodes: set[str], adj: dict[str, set[str]]) -> list[list[str]]:
-    """Tarjan's algorithm for strongly connected components.
+def tarjan_scc(
+    nodes: Iterable[str], adj: Mapping[str, Iterable[str]]
+) -> list[list[str]]:
+    """Tarjan's algorithm for strongly connected components, without recursion.
 
-    Returns a list of SCCs, each SCC being a list of node labels.
+    Returns a list of SCCs, each a list of node labels, in exactly the order
+    the recursive formulation produces: each work frame keeps its successor
+    *iterator*, so a node resumes scanning its neighbours where the descent
+    left off. The recursive version needed one Python frame per node on a
+    path, so a long import chain (3000 edges) raised ``RecursionError`` —
+    after both paid LLM passes, discarding the graph.
     """
-    index_counter = [0]
-    stack: list[str] = []
-    on_stack: set[str] = set()
     index_map: dict[str, int] = {}
     lowlink: dict[str, int] = {}
+    stack: list[str] = []
+    on_stack: set[str] = set()
     sccs: list[list[str]] = []
+    counter = 0
+    empty: tuple[str, ...] = ()
 
-    def strongconnect(v: str) -> None:
-        index_map[v] = index_counter[0]
-        lowlink[v] = index_counter[0]
-        index_counter[0] += 1
-        stack.append(v)
-        on_stack.add(v)
-
-        for w in adj.get(v, set()):
-            if w not in index_map:
-                strongconnect(w)
-                lowlink[v] = min(lowlink[v], lowlink[w])
-            elif w in on_stack:
-                lowlink[v] = min(lowlink[v], index_map[w])
-
-        if lowlink[v] == index_map[v]:
-            scc: list[str] = []
-            while True:
-                w = stack.pop()
-                on_stack.discard(w)
-                scc.append(w)
-                if w == v:
+    for root in nodes:
+        if root in index_map:
+            continue
+        index_map[root] = lowlink[root] = counter
+        counter += 1
+        stack.append(root)
+        on_stack.add(root)
+        work: list[tuple[str, Iterator[str]]] = [(root, iter(adj.get(root, empty)))]
+        while work:
+            v, successors = work[-1]
+            descended = False
+            for w in successors:
+                if w not in index_map:
+                    index_map[w] = lowlink[w] = counter
+                    counter += 1
+                    stack.append(w)
+                    on_stack.add(w)
+                    work.append((w, iter(adj.get(w, empty))))
+                    descended = True
                     break
-            sccs.append(scc)
-
-    for node in nodes:
-        if node not in index_map:
-            strongconnect(node)
-
+                if w in on_stack:
+                    lowlink[v] = min(lowlink[v], index_map[w])
+            if descended:
+                continue
+            # v is finished: propagate its lowlink to the caller frame, then
+            # emit its component if v is the component's root.
+            work.pop()
+            if work:
+                parent = work[-1][0]
+                lowlink[parent] = min(lowlink[parent], lowlink[v])
+            if lowlink[v] == index_map[v]:
+                scc: list[str] = []
+                while True:
+                    w = stack.pop()
+                    on_stack.discard(w)
+                    scc.append(w)
+                    if w == v:
+                        break
+                sccs.append(scc)
     return sccs
 
 
@@ -137,7 +157,7 @@ def detect_cycles(
         sloc_map = {_norm_path(k): v for k, v in sloc_map.items()}
 
     nodes, adj = _build_adjacency(edges)
-    sccs = _tarjan_scc(nodes, adj)
+    sccs = tarjan_scc(nodes, adj)
 
     cycles: list[Cycle] = []
     for scc in sccs:
