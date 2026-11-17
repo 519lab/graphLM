@@ -7,6 +7,8 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-17
+
 ### Infrastructure
 - **Releases are now automatic.** Merging the develop → main promotion tags the release, creates the GitHub Release from this changelog, and publishes to PyPI, with no hand-made tag. The package version is now read from this file's top release section, so the published version and the tag always agree. Each release's tag is created by the release workflow and is no longer GPG-signed.
 
