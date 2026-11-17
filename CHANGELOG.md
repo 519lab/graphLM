@@ -7,6 +7,8 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-17
+
 ### Fixed
 - **Security: `graphlm --upgrade` and `graphlm --setup` no longer run the installer inside the directory you are standing in.** graphlm is usually run from the repository it maps, and that repository is untrusted. Several installers read files from their working directory, so a repository could make the upgrade or setup install step run its own code or install from an index it chose. The installer now always runs from your home directory, and the pip branches add `python -P` so the working directory never lands on `sys.path`. Your own pip / uv / pipx configuration still applies. Upgrade with `graphlm --upgrade` from a directory you trust (your home directory, for example).
 
@@ -399,7 +401,8 @@ First public release. graphlm is installable from PyPI (`uv tool install graphlm
 - mypy type checking in CI
 - Removed stale generated artifacts (`graphs.md`, `graphs.json`, `graph.html`) left over from before the `GRAPH.*` output rename, and the committed `.coverage` database; the repo no longer ships tool output. Added `.coverage`, `coverage.xml`, and the `GRAPH.*` output files to `.gitignore` so generated artifacts stay out of version control
 
-[Unreleased]: https://github.com/519lab/graphLM/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/519lab/graphLM/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/519lab/graphLM/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/519lab/graphLM/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/519lab/graphLM/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/519lab/graphLM/compare/v0.4.2...v0.5.0
