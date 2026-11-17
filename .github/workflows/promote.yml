@@ -1,6 +1,11 @@
 name: promote
 
-# Opens or refreshes the single develop → main promotion pull request after CI passes on a develop push.
+# After CI passes on a develop push (ADR-020):
+#   version  rolls CHANGELOG.md's [Unreleased] entries into the next `## [X.Y.Z] - date`
+#            section via a `chore(release): roll changelog into X.Y.Z` pull request into
+#            develop. Merging that pull request is the decision to release.
+#   promote  once nothing is left to roll, opens or refreshes the single develop → main
+#            promotion pull request. Merging it makes release.yml tag and publish X.Y.Z.
 # The logic lives in ggrace519/.github; see its README.
 
 on:
@@ -11,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 # Only push-triggered and manual runs share the group, so a newer one cancels a superseded one.
@@ -25,14 +30,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  promote:
+  version:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push')
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ggrace519/.github/.github/workflows/version.yml@8217a8363cd8f8222471a39df2a0892e0fec2c00 # v2.0.0
+    with:
+      ref: ${{ github.event.workflow_run.head_sha }}
+      app-client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+    secrets:
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+  promote:
+    needs: version
+    # Not while a roll-up pull request is open, nor for a commit develop has moved past.
+    if: needs.version.outputs.promote == 'true'
+    permissions:
+      contents: read
+      pull-requests: write
     uses: ggrace519/.github/.github/workflows/promote.yml@8217a8363cd8f8222471a39df2a0892e0fec2c00 # v2.0.0
     with:
       app-client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
-      ref: ${{ github.event.workflow_run.head_sha }}
+      ref: ${{ needs.version.outputs.sha }}
     secrets:
       app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
