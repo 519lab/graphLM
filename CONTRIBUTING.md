@@ -128,8 +128,10 @@ steps are automated with [bump-my-version](https://github.com/callowayproject/bu
 (config in `[tool.bumpversion]` in `pyproject.toml`):
 
 1. Make sure `## [Unreleased]` in `CHANGELOG.md` describes what's shipping and
-   local `main` is clean and synchronized with `origin/main`. Create a release
-   branch from that commit (for example, `chore/release-0.4.2`).
+   local `develop` is clean and synchronized with `origin/develop`. Create a
+   release branch from that commit (for example, `chore/release-0.4.2`). Pull
+   requests never target `main` directly; it only receives the develop → main
+   promotion.
 2. Bump — this updates `version` in `pyproject.toml`, promotes `[Unreleased]` to
    a dated `## [X.Y.Z]` section, and updates the compare links. It intentionally
    does **not** commit or tag:
@@ -142,9 +144,14 @@ steps are automated with [bump-my-version](https://github.com/callowayproject/bu
    `uvx bump-my-version bump patch --dry-run --verbose`.
 3. `uv lock` (the version change dirties the lockfile; bump-my-version doesn't
    run this), then run the full test, mypy, build, and clean-wheel smoke gates.
+   Lock with a uv at least as new as the one that last wrote `uv.lock`: an older
+   uv rewrites the lockfile `revision` and markers, not just the version line
+   (`uvx uv@latest lock` avoids upgrading your installed uv).
 4. Make a GPG-signed `chore(release): X.Y.Z` commit, push the release branch,
-   open a PR, and wait for every PR check to pass. Merge the approved PR and
-   wait for CI on the resulting `origin/main` commit.
+   open a PR into `develop`, and wait for every PR check to pass. Merge it; the
+   `promote` workflow then opens or refreshes the develop → main promotion PR.
+   Merge that as a merge commit (never squash) and wait for CI on the resulting
+   `origin/main` commit.
 5. Create, verify, and push a signed tag on the promoted `origin/main` commit.
    Tag `origin/main` **by name** so this works from any checkout — you do not
    need `main` checked out (and it may be checked out in another worktree; run
