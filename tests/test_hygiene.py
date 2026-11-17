@@ -90,3 +90,19 @@ def test_readable_user_config_warns(monkeypatch, tmp_path, caplog, mode, warns):
         # restore that value at teardown, so pop it directly.
         os.environ.pop("GRAPHLM_MODEL", None)
     assert ("chmod 600" in caplog.text) is warns
+
+
+def test_permission_check_is_posix_only(monkeypatch, tmp_path, caplog):
+    env = tmp_path / ".env"
+    env.write_text("X=1\n")
+    env.chmod(0o644)
+    monkeypatch.setattr(config.os, "name", "nt")
+    with caplog.at_level(logging.WARNING, logger="graphlm.config"):
+        config._warn_if_readable_by_others(env)
+    assert "chmod 600" not in caplog.text
+
+
+def test_permission_check_tolerates_a_vanished_file(tmp_path, caplog):
+    with caplog.at_level(logging.WARNING, logger="graphlm.config"):
+        config._warn_if_readable_by_others(tmp_path / "gone.env")  # stat raises
+    assert caplog.text == ""
