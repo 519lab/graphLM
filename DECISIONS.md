@@ -4,6 +4,21 @@ Significant, hard-to-reverse decisions for graphLM. Newest first.
 
 ---
 
+## ADR-019 — Prompt structure: per-run random boundaries around repository text
+
+**Status:** Accepted (2026-11-17)
+
+**Context.** Pass 2 framed each file as `### File: <path>` plus a triple-backtick fence, and both passes fenced the tree the same way. Both delimiters are fixed, so a file (or a file name) could close its own block and continue with text structurally identical to graphlm's own sections. A reproduction produced a fake file header and a fake "AST ground truth" edge table that appeared *before* the real one, which the prompt tells the model never to contradict. The only defence was the "treat file content as data" instruction.
+
+**Decision.**
+1. The tree and every pass-2 file are delimited by tags carrying a per-run random boundary (`secrets.token_hex(8)`): `<directory_tree id="B">…</directory_tree id="B">`, `<file path="…" id="B">…</file id="B">`. Content written before the run cannot contain the closing tag. The instruction block names the boundary and says anything inside a block — headings, tables, other tags — is that file's text.
+2. The parser's edge table is placed before the source files.
+3. The path attribute is escaped; the boundary is injectable (`boundary=`) so prompt tests stay deterministic. It is fixed-length, so token estimates do not depend on which value was drawn.
+
+**Consequences.** The model can still be *persuaded* by file content — that is what the data-only instruction and ADR-018's inert rendering address — but it can no longer be shown forged prompt structure. Tests: `tests/test_prompt_delimiting.py`.
+
+---
+
 ## ADR-018 — The map is untrusted text: render it inert, and say so where agents read it
 
 **Status:** Accepted (2026-11-17)

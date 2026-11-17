@@ -668,7 +668,7 @@ class TestSkeletonInPrompt:
             output_dir=tmp_path,
         )
         prompt = self._pass2_user_content(httpx_mock)
-        assert "### File: big_module.py" in prompt
+        assert '<file path="big_module.py"' in prompt
         assert "# [graphlm skeleton: bodies elided; 202 source lines]" in prompt
         assert "def merge_inventories(" in prompt  # deep in the file; the head lost it
         assert "[graphlm skeleton: …]" in prompt  # the instruction-block sentence
