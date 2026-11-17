@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from graphlm.bounded_read import read_bytes_bounded
+from graphlm.limits import MAX_SOURCE_READ
 from graphlm.models import ImportEdge
 from graphlm.scanner import FileFragment
 
@@ -367,7 +369,9 @@ def _source_bytes(frag: FileFragment, project_dir: Path | None) -> bytes | None:
         fpath = project_dir / frag.rel_path
         if fpath.is_file():
             try:
-                return fpath.read_bytes()
+                # Bounded like the scanner's read: imports sit at the top of a
+                # file, and a huge scanned file must not be read whole.
+                return read_bytes_bounded(fpath, MAX_SOURCE_READ)
             except (OSError, PermissionError) as e:
                 logger.warning("Could not read %s: %s", fpath, e)
                 return None
