@@ -10,7 +10,7 @@ import pytest
 from graphlm.cycles import (
     _build_adjacency,
     _compute_risk_score,
-    _tarjan_scc,
+    tarjan_scc,
     compute_sloc_map,
     detect_cycles,
 )
@@ -32,13 +32,13 @@ class TestTarjanSCC:
     def test_no_cycles(self):
         nodes = {"a", "b", "c"}
         adj = {"a": {"b"}, "b": {"c"}, "c": set()}
-        sccs = _tarjan_scc(nodes, adj)
+        sccs = tarjan_scc(nodes, adj)
         assert all(len(scc) == 1 for scc in sccs)
 
     def test_two_way_cycle(self):
         nodes = {"a", "b"}
         adj = {"a": {"b"}, "b": {"a"}}
-        sccs = _tarjan_scc(nodes, adj)
+        sccs = tarjan_scc(nodes, adj)
         scc_with_two = [s for s in sccs if len(s) == 2]
         assert len(scc_with_two) == 1
         assert set(scc_with_two[0]) == {"a", "b"}
@@ -46,7 +46,7 @@ class TestTarjanSCC:
     def test_three_node_cycle(self):
         nodes = {"a", "b", "c"}
         adj = {"a": {"b"}, "b": {"c"}, "c": {"a"}}
-        sccs = _tarjan_scc(nodes, adj)
+        sccs = tarjan_scc(nodes, adj)
         scc_with_three = [s for s in sccs if len(s) == 3]
         assert len(scc_with_three) == 1
         assert set(scc_with_three[0]) == {"a", "b", "c"}
@@ -61,7 +61,7 @@ class TestTarjanSCC:
             "d": {"e"},
             "e": {"d"},
         }
-        sccs = _tarjan_scc(nodes, adj)
+        sccs = tarjan_scc(nodes, adj)
         multi = [s for s in sccs if len(s) > 1]
         assert len(multi) == 2
         sets = {frozenset(s) for s in multi}
@@ -72,7 +72,7 @@ class TestTarjanSCC:
         """A self-loop alone is a single-node SCC and should be excluded."""
         nodes = {"a"}
         adj = {"a": {"a"}}
-        sccs = _tarjan_scc(nodes, adj)
+        sccs = tarjan_scc(nodes, adj)
         assert len(sccs) == 1
         assert sccs[0] == ["a"]
 
