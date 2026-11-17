@@ -122,64 +122,45 @@ grammar-absent degradation. Open an issue first so we can talk through the appro
 
 ## Releasing (maintainers)
 
-Releases publish to PyPI and a GitHub Release from a single `v*` tag (Trusted
-Publishing — see `.github/workflows/release.yml` and ADR-003). The mechanical
-steps are automated with [bump-my-version](https://github.com/callowayproject/bump-my-version)
-(config in `[tool.bumpversion]` in `pyproject.toml`):
+Releases are automatic (ADR-020). Nobody bumps a version or pushes a tag by hand.
+The package version *is* the top `## [X.Y.Z] - YYYY-MM-DD` section of
+`CHANGELOG.md` (`pyproject.toml` reads it via hatchling's `[tool.hatch.version]`),
+and the release workflow tags exactly that section.
 
-1. Make sure `## [Unreleased]` in `CHANGELOG.md` describes what's shipping and
-   local `develop` is clean and synchronized with `origin/develop`. Create a
-   release branch from that commit (for example, `chore/release-0.4.2`). Pull
-   requests never target `main` directly; it only receives the develop → main
-   promotion.
-2. Bump — this updates `version` in `pyproject.toml`, promotes `[Unreleased]` to
-   a dated `## [X.Y.Z]` section, and updates the compare links. It intentionally
-   does **not** commit or tag:
+1. Every pull request into `develop` with a user-visible effect adds its entry
+   under `## [Unreleased]`, in the right category. The entries decide the bump:
+   `- BREAKING: …` or a `### Breaking` heading is major (minor while on 0.x), any
+   `### Added` entry is minor, anything else is patch. A CI- or docs-only change
+   still needs an `### Infrastructure` or `### Docs` entry if it is to ship:
+   **every promotion is a release**, and a promotion with nothing new to release
+   fails the `release` check.
+2. After CI passes on `develop`, the `promote` workflow's `version` job opens (or
+   refreshes) **`chore(release): roll changelog into X.Y.Z`** from
+   `chore/roll-changelog`. It moves the `[Unreleased]` entries into a dated
+   `## [X.Y.Z]` section. Don't push to that branch; the workflow rebuilds it.
+   **Merging it is the decision to release.** If `develop` moves first, the same
+   pull request is updated with the new entries and version.
+3. With nothing left to roll, `promote` opens the develop → main promotion pull
+   request. Its `Release / Tag & GitHub Release` check is a dry run that fails
+   if the changelog is not ready (entries left under `[Unreleased]`, no dated
+   section, or a version not newer than the latest tag). Merge it as a merge
+   commit (never squash).
+4. The push to `main` runs `.github/workflows/release.yml`. It creates the tag
+   `vX.Y.Z` and a GitHub Release whose notes are that changelog section, builds
+   the tagged commit, checks that the wheel and sdist carry `X.Y.Z`, smoke-tests
+   the wheel in a clean venv, uploads both artifacts to the release, and
+   publishes them to PyPI through Trusted Publishing. Watch the run, then verify
+   a clean install: `uv tool install graphlm==X.Y.Z && graphlm --version`.
 
-   ```bash
-   uvx bump-my-version bump patch   # or: minor / major
-   ```
+If a job fails after the tag exists (PyPI outage, a flaky upload), use **Re-run
+failed jobs** on that run. The tag job's outputs are kept, so it resumes at the
+failed step; never delete and re-create the tag. A PyPI version can never be
+reused, so rehearse risky release changes first with the workflow's
+`workflow_dispatch` → `testpypi` (it skips tagging and builds the chosen branch).
 
-   Dry-run first to see the exact changes without touching anything:
-   `uvx bump-my-version bump patch --dry-run --verbose`.
-3. `uv lock` (the version change dirties the lockfile; bump-my-version doesn't
-   run this), then run the full test, mypy, build, and clean-wheel smoke gates.
-   Lock with a uv at least as new as the one that last wrote `uv.lock`: an older
-   uv rewrites the lockfile `revision` and markers, not just the version line
-   (`uvx uv@latest lock` avoids upgrading your installed uv).
-4. Make a GPG-signed `chore(release): X.Y.Z` commit, push the release branch,
-   open a PR into `develop`, and wait for every PR check to pass. Merge it; the
-   `promote` workflow then opens or refreshes the develop → main promotion PR.
-   Merge that as a merge commit (never squash) and wait for CI on the resulting
-   `origin/main` commit.
-5. Create, verify, and push a signed tag on the promoted `origin/main` commit.
-   Tag `origin/main` **by name** so this works from any checkout — you do not
-   need `main` checked out (and it may be checked out in another worktree; run
-   `git worktree list` if a `checkout` ever fails). The block is `&&`-chained
-   and the sanity check **hard-fails** (`|| exit 1`) so a mismatch stops before
-   the irreversible `push`:
-
-   ```bash
-   git fetch origin && \
-   git tag -s vX.Y.Z origin/main -m "graphlm vX.Y.Z" && \
-   git verify-tag vX.Y.Z && \
-   { test "$(git rev-parse 'vX.Y.Z^{}')" = "$(git rev-parse origin/main)" \
-       || { echo "ABORT: tag is not on origin/main"; exit 1; }; } && \
-   git push origin refs/tags/vX.Y.Z
-   ```
-
-   The tag fires the release workflow. Watch its build, GitHub Release, and
-   PyPI jobs through completion, then verify a clean install from PyPI.
-
-   > A tag push is irreversible for a published version. If the tag ever lands
-   > on the wrong commit, do **not** delete-and-re-push — that re-fires the
-   > release workflow and the PyPI upload fails (a version can't be reused).
-   > If the mistaken tag's tree is identical to `origin/main`, the published
-   > artifacts are unaffected; leave it.
-
-Publishing is irreversible (a PyPI version can't be reused); rehearse risky
-changes against TestPyPI first via the workflow's `workflow_dispatch` →
-`testpypi`.
+The tags are created by the workflow through the GitHub API, so they are
+lightweight and unsigned. The signed `chore(release)` roll-up commit and the
+merge commits are the record of who decided to release.
 
 ## Reporting security issues
 
