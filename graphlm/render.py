@@ -83,12 +83,16 @@ def _render_directive(meta: GraphMeta) -> str:
     root) — deliberately relative, so a committed GRAPH.md carries no absolute
     path and the line is copy-pasteable anywhere.
     """
-    date = meta.created_at
+    # Filled locally today, but a loaded graph (a committed baseline) could
+    # carry anything: escaped like every other value (unchanged when ordinary).
+    date = md_text(meta.created_at)
     # Name the graphlm version so a human verifying the map can see which
     # version produced it (and a stale map from an old version is obvious).
-    by = f"by graphlm {meta.graphlm_version} " if meta.graphlm_version else ""
+    by = f"by graphlm {md_text(meta.graphlm_version)} " if meta.graphlm_version else ""
     if meta.commit_sha:
         sha8 = meta.commit_sha[:8]
+        if not all(c in "0123456789abcdef" for c in sha8.lower()):
+            sha8 = md_code(sha8).strip("`")
         return (
             "> **Provenance & refresh directive.** This codebase map was "
             f"generated {by}against commit `{sha8}` on {date}.\n"

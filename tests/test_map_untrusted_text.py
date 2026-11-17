@@ -198,6 +198,7 @@ BLOCK_PAYLOADS = [
     f"[r]: https://attacker.example/{MARK}", f"[see][r] {MARK}", f"=== {MARK}",
     f"   # {MARK}", f"x\n\n# {MARK}\n\n![i](https://attacker.example/p.png)",
     f"a‮{MARK}", f"a\U000e0041{MARK}", f"<details>{MARK}",
+    f"    {MARK} code", f"\t{MARK} code", f"\t# {MARK}", f"  \t> {MARK}",
 ] + HOSTILE
 
 
@@ -280,3 +281,23 @@ def test_lookalike_block_starts_are_unchanged(text):
 
 def test_invisible_characters_are_made_visible():
     assert md_text("a‮b​c\U000e0041") == "a\\u202eb\\u200bc\\U000e0041"
+
+
+
+def test_directive_meta_values_are_inert():
+    hostile = CodebaseGraph(
+        directory_tree="root/\n",
+        meta=GraphMeta(
+            created_at=f"2026\n\n# {MARK}",
+            graphlm_version=f"1.0\n\n![i](https://attacker.example/{MARK})",
+            commit_sha="``````zz",
+        ),
+    )
+    clean = CodebaseGraph(
+        directory_tree="root/\n",
+        meta=GraphMeta(created_at="2026", graphlm_version="1.0",
+                       commit_sha="0123456789abcdef0123456789abcdef01234567"),
+    )
+    md = render_markdown(hostile)
+    _assert_inert(md)
+    assert _structure(md) == _structure(render_markdown(clean))

@@ -35,6 +35,8 @@ _ACTIVE_INLINE = re.compile(r"!\[|\]\(|\]\[|<[A-Za-z/!?]")
 # Block syntax that is live at the start of a paragraph or bullet: ATX heading,
 # block quote, list item, ordered list item, thematic break / setext underline,
 # fence, link reference definition, HTML block.
+# Indentation that starts an indented code block (4+ columns; a tab is 4).
+_CODE_INDENT = re.compile(r"^(?: {4,}| {0,3}\t)")
 _BLOCK_START = re.compile(
     r"^( {0,3})(?:"
     r"(#{1,6})(?=[ \t]|$)"
@@ -93,6 +95,11 @@ def md_text(value: object, *, cell: bool = False) -> str:
     spans in backticks, is returned as is.
     """
     text = str(value)
+    if _CODE_INDENT.match(text):
+        # Leading indentation means nothing in one-line prose, but 4+ columns
+        # would open an indented code block (or hide a heading inside a
+        # bullet). Drop it; the block-marker check then applies to the rest.
+        text = text.lstrip(" \t")
     if (
         not _CONTROL.search(text)
         and not _ACTIVE_INLINE.search(text)
