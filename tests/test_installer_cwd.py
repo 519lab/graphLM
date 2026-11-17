@@ -77,14 +77,22 @@ def _version_only(argv: list[str]) -> list[str]:
     return argv[: argv.index("pip") + 1] + ["--version"]
 
 
-def _real_runner(*, force_cwd: Path | None = None):
-    """Run the planned interpreter for real, honouring the kwargs graphlm passes."""
+def _real_runner(*, force_cwd: Path | None = None, strip_p: bool = False):
+    """Run the planned interpreter for real, honouring the kwargs graphlm passes.
+
+    ``force_cwd`` overrides graphlm's ``cwd`` (isolates the ``-P`` layer);
+    ``strip_p`` removes ``-P`` (isolates the cwd layer — what pipx's own inner
+    ``python -m pip`` and the uv branches rely on).
+    """
 
     def run(argv, **kwargs):
         run.calls.append(list(argv))  # type: ignore[attr-defined]
         if force_cwd is not None:
             kwargs["cwd"] = force_cwd
-        return subprocess.run(_version_only(list(argv)), capture_output=True, **kwargs)
+        cmd = _version_only(list(argv))
+        if strip_p:
+            cmd = [a for a in cmd if a != "-P"]
+        return subprocess.run(cmd, capture_output=True, **kwargs)
 
     run.calls = []  # type: ignore[attr-defined]
     return run
@@ -129,6 +137,27 @@ class TestHostilePipPyDoesNotRun:
         _pip_present(monkeypatch)
         runner = _real_runner(force_cwd=Path.cwd())
         U.run_upgrade(executable=Path(sys.executable), runner=runner, echo=lambda s: None)
+        _assert_ran_pip(runner)
+        assert not hostile_cwd.exists()
+
+    def test_run_upgrade_cwd_alone_protects(self, monkeypatch, hostile_cwd):
+        monkeypatch.setattr(U, "detect_installer", lambda exe, **k: "pip")
+        monkeypatch.setattr(U, "installed_extras", lambda **k: ())
+        _pip_present(monkeypatch)
+        runner = _real_runner(strip_p=True)
+        U.run_upgrade(executable=Path(sys.executable), runner=runner, echo=lambda s: None)
+        _assert_ran_pip(runner)
+        assert not hostile_cwd.exists()
+
+    def test_run_setup_cwd_alone_protects(self, monkeypatch, hostile_cwd, tmp_path):
+        monkeypatch.setattr(S, "detect_installer", lambda exe: "pip")
+        monkeypatch.setattr(S, "installed_extras", lambda **k: ())
+        _pip_present(monkeypatch)
+        runner = _real_runner(strip_p=True)
+        S.run_setup(
+            echo=lambda s: None, prompt=lambda p: "1", runner=runner,
+            executable=Path(sys.executable), home=tmp_path / "marker-home",
+        )
         _assert_ran_pip(runner)
         assert not hostile_cwd.exists()
 
