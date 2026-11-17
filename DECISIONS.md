@@ -12,7 +12,8 @@ Significant, hard-to-reverse decisions for graphLM. Newest first.
 
 **Decision.**
 1. The tree and every pass-2 file are delimited by tags carrying a per-run random boundary (`secrets.token_hex(8)`): `<directory_tree id="B">…</directory_tree id="B">`, `<file path="…" id="B">…</file id="B">`. Content written before the run cannot contain the closing tag. The instruction block names the boundary and says anything inside a block — headings, tables, other tags — is that file's text.
-2. The parser's edge table is placed before the source files.
+2. The parser's edge table is placed before the source files and is itself delimited (`<edge_table id="B">`): its endpoints come from string literals in the scanned files (PHP `require`, JS `import`), so a row can carry a newline and a forged section. Rows show control characters as escapes and escape `|` (`_cell`).
+4. The prompt names the authoritative tag form in its opening lines, before any repository text, so a model meets the rule before any forged tag.
 3. The path attribute is escaped; the boundary is injectable (`boundary=`) so prompt tests stay deterministic. It is fixed-length, so token estimates do not depend on which value was drawn.
 
 **Consequences.** The model can still be *persuaded* by file content — that is what the data-only instruction and ADR-018's inert rendering address — but it can no longer be shown forged prompt structure. Tests: `tests/test_prompt_delimiting.py`.
