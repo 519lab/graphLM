@@ -26,8 +26,10 @@ import re
 # tag characters — a known invisible prompt-injection channel). Tab is allowed:
 # it neither breaks a line nor hides text.
 _CONTROL = re.compile(
-    "[\x00-\x08\x0a-\x1f\x7f\x85­​-‏  ‪-‮"
-    "⁠-⁤⁦-⁩﻿\U000e0000-\U000e007f]"
+    # Every C0 control except tab. One range from \x00 rather than two around
+    # \t, so the class reads as intended (CodeQL py/overly-large-range).
+    r"(?!\t)[\x00-\x1f\x7f\x85\xad\u200b-\u200f\u2028-\u202e"
+    r"\u2060-\u2064\u2066-\u2069\ufeff\U000e0000-\U000e007f]"
 )
 # Inline syntax that turns text into something active: an image (fetched when
 # rendered), an inline or reference link, raw HTML / an autolink.

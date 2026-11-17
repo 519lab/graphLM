@@ -89,7 +89,7 @@ def test_broken_symlink_is_not_listed(tmp_path):
 # --------------------------------------------------------------------------- #
 # Names that would break the tree's line structure are skipped
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("sep", ["\n", "\r", " ", "\x1b"])
+@pytest.mark.parametrize("sep", ["\n", "\r", "\u2028", "\x1b"])
 def test_line_breaking_name_is_skipped(tmp_path, sep):
     proj = _project(tmp_path)
     marker = "INERT_MARKER_LINE"

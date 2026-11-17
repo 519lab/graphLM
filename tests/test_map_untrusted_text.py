@@ -36,7 +36,7 @@ HOSTILE = [
     f"[click](https://attacker.example/{MARK})",
     f"cell | {MARK} | breaks the table",
     f"line one\n## {MARK}",
-    f"x # {MARK}",
+    f"x\u2028# {MARK}",
 ]
 
 
@@ -82,8 +82,8 @@ def test_file_name_cannot_close_the_tree_fence(name):
 
 
 def test_control_characters_in_tree_are_made_visible():
-    md = render_markdown(CodebaseGraph(directory_tree=f"root/\n  a # {MARK}\r\n  b"))
-    assert " " not in md and "\\u2028" in md
+    md = render_markdown(CodebaseGraph(directory_tree=f"root/\n  a\u2028# {MARK}\r\n  b"))
+    assert "\u2028" not in md and "\\u2028" in md
     _assert_inert(md)
 
 
@@ -197,7 +197,7 @@ BLOCK_PAYLOADS = [
     f"# {MARK}", f"> {MARK}", "---", "***", f"- {MARK}", f"1. {MARK}", "```", "~~~",
     f"[r]: https://attacker.example/{MARK}", f"[see][r] {MARK}", f"=== {MARK}",
     f"   # {MARK}", f"x\n\n# {MARK}\n\n![i](https://attacker.example/p.png)",
-    f"a‮{MARK}", f"a\U000e0041{MARK}", f"<details>{MARK}",
+    f"a\u202e{MARK}", f"a\U000e0041{MARK}", f"<details>{MARK}",
     f"    {MARK} code", f"\t{MARK} code", f"\t# {MARK}", f"  \t> {MARK}",
 ] + HOSTILE
 
@@ -280,7 +280,7 @@ def test_lookalike_block_starts_are_unchanged(text):
 
 
 def test_invisible_characters_are_made_visible():
-    assert md_text("a‮b​c\U000e0041") == "a\\u202eb\\u200bc\\U000e0041"
+    assert md_text("a\u202eb\u200bc\U000e0041") == "a\\u202eb\\u200bc\\U000e0041"
 
 
 
