@@ -231,7 +231,10 @@ class TestRenderHtml:
     def test_embeds_d3_cdn(self):
         graph = CodebaseGraph(directory_tree="test/")
         html = render_html(graph)
-        assert "d3.v7.min.js" in html
+        # Exact version + Subresource Integrity, never a floating URL.
+        assert 'src="https://cdn.jsdelivr.net/npm/d3@7.9.2/dist/d3.min.js"' in html
+        assert 'integrity="sha384-' in html and 'crossorigin="anonymous"' in html
+        assert "d3.v7.min.js" not in html
 
     def test_embeds_graph_data(self):
         graph = CodebaseGraph(
@@ -524,7 +527,7 @@ class TestWriteOutputsWithHtml:
             _, _, html_path = write_outputs(graph, Path(tmpdir))
             html = html_path.read_text(encoding="utf-8")
             assert "<style>" in html
-            assert "d3js.org" in html
+            assert "cdn.jsdelivr.net/npm/d3@7.9.2/" in html
 
 
 def _edge(a: str, b: str, kind: str = "import") -> ImportEdge:

@@ -7,6 +7,12 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- **`GRAPH.html` now loads one exact, integrity-checked build of D3 and runs no other script.** It used a floating `d3.v7` URL with no integrity check, so whoever controlled that URL could run script in every generated graph page. The page now loads `d3@7.9.2` from jsDelivr with a Subresource Integrity hash, and a Content-Security-Policy allows only that file and the page's own inline script (by hash). The page still needs network access to draw the graph.
+
+### Infrastructure
+- **Release and CI workflows are harder to tamper with.** Every GitHub Action is pinned to a full commit SHA instead of a movable tag or branch. The release build refuses a `v*` tag that is not on `main`. Dependabot auto-merge now checks who opened the pull request rather than who triggered the run, and no longer auto-merges GitHub Actions updates, which run with release credentials.
+
 ## [0.7.1] - 2026-11-17
 
 ### Fixed
