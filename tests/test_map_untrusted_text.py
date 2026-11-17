@@ -176,3 +176,107 @@ def test_pipe_cannot_shift_text_into_another_column():
     path_cell, name_cell, desc_cell = row
     assert MARK in name_cell and MARK not in desc_cell
     assert desc_cell == "the real description"
+
+
+# --------------------------------------------------------------------------- #
+# Structure invariance: every string field, every hostile payload
+# --------------------------------------------------------------------------- #
+from graphlm.models import (  # noqa: E402
+    EntryPoint,
+    EvidenceSupport,
+    FileImportance,
+    FileScore,
+    FileSummary,
+    GraphMeta,
+    QuickReference,
+    Symbol,
+    TestMapping,
+)
+
+BLOCK_PAYLOADS = [
+    f"# {MARK}", f"> {MARK}", "---", "***", f"- {MARK}", f"1. {MARK}", "```", "~~~",
+    f"[r]: https://attacker.example/{MARK}", f"[see][r] {MARK}", f"=== {MARK}",
+    f"   # {MARK}", f"x\n\n# {MARK}\n\n![i](https://attacker.example/p.png)",
+    f"a‮{MARK}", f"a\U000e0041{MARK}", f"<details>{MARK}",
+] + HOSTILE
+
+
+def _every_field_graph(v: str) -> CodebaseGraph:
+    return CodebaseGraph(
+        directory_tree=f"root/\n  {v}",
+        import_edges=[ImportEdge(from_path=v, to_path=v, kind=v)],
+        modules=[ModuleDescription(name=v, path=v, description=v)],
+        data_flow=[DataFlowEdge(source=v, destination=v, description=v)],
+        test_organization=[TestMapping(file=v, covers=v)],
+        architecture_notes=[ArchitectureNote(note=v)],
+        file_summaries=[FileSummary(path=v, summary=v, symbols=[Symbol(name=v, kind=v, description=v)])],
+        entry_points=[EntryPoint(path=v, name=v, kind=v, description=v)],
+        quick_reference=[QuickReference(query=v, location=v)],
+        deterministic_edges=[ImportEdge(from_path=f"{v}/a.py", to_path="lib/b.py", kind="import")],
+        meta=GraphMeta(
+            created_at="t", graphlm_version="1.0", commit_sha=None,
+            evidence_support=EvidenceSupport(mean=0.5, scored=1, skipped=0, low=[FileScore(path=v, score=0.1)]),
+            file_importance=[FileImportance(path=v, role=1.0, degree=1, fused=0.5)],
+        ),
+    )
+
+
+def _structure(md: str) -> list[tuple[str, ...]]:
+    out = []
+    for t in _MD.parse(md):
+        out.append((t.type, t.tag, str(t.nesting)))
+        for c in t.children or []:
+            if c.type not in {"text", "softbreak", "code_inline", "html_inline"} or c.type == "html_inline":
+                out.append(("  " + c.type, c.tag))
+    return out
+
+
+@pytest.mark.parametrize("payload", BLOCK_PAYLOADS)
+def test_no_payload_changes_the_documents_structure(payload):
+    try:
+        clean = _every_field_graph("clean")
+        hostile = _every_field_graph(payload)
+    except Exception as e:  # a field rejecting the value is not a render path
+        pytest.skip(f"model rejects payload: {e}")
+    assert _structure(render_markdown(hostile)) == _structure(render_markdown(clean))
+
+
+@pytest.mark.parametrize("payload", BLOCK_PAYLOADS)
+def test_no_payload_changes_the_diffs_structure(payload):
+    empty = CodebaseGraph(directory_tree="")
+    clean = render_diff_markdown(compute_diff(empty, _every_field_graph("clean"), BaselineState.NORMAL))
+    hostile = render_diff_markdown(compute_diff(empty, _every_field_graph(payload), BaselineState.NORMAL))
+    assert _structure(hostile) == _structure(clean)
+
+
+def test_committed_baseline_version_cannot_inject_into_the_diff(tmp_path):
+    import json
+
+    from graphlm.render import render_json, write_outputs
+
+    out = tmp_path / ".graphlm"
+    out.mkdir()
+    prior = _every_field_graph("clean")
+    prior.meta.graphlm_version = f"1.0\n\n# {MARK}\n\n![i](https://attacker.example/p.png)"
+    (out / ".graph-state.json").write_bytes(render_json(prior))
+    new = _every_field_graph("clean")
+    new.meta.graphlm_version = "2.0"
+    paths = write_outputs(new, out, html=False)
+    _assert_inert(paths.diff_md.read_text())
+    assert json.loads((out / ".graph-state.json").read_text())["meta"]["graphlm_version"] == "2.0"
+
+
+def test_pipes_are_plain_text_outside_tables():
+    assert md_text("a | b") == "a | b"
+    assert md_text("a | b", cell=True) == "a \\| b"
+    assert md_code("src/a|b.py") == "`src/a|b.py`"
+    assert md_code("src/a|b.py", cell=True) == "`src/a\\|b.py`"
+
+
+@pytest.mark.parametrize("text", ["1 module", "-1 offset", "#hashtag", "a\tb", "3.5x faster", "1.5 is the ratio"])
+def test_lookalike_block_starts_are_unchanged(text):
+    assert md_text(text) == text
+
+
+def test_invisible_characters_are_made_visible():
+    assert md_text("a‮b​c\U000e0041") == "a\\u202eb\\u200bc\\U000e0041"

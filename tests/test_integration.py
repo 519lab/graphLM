@@ -914,7 +914,7 @@ class TestEvidenceIntegration:
         # (the only link between a low score and what a reader sees).
         md = (tmp_path / "GRAPH.md").read_text()
         assert "summary evidence support" in md
-        assert "weakest: app/routes.py 0.30" in md
+        assert "weakest: `app/routes.py` 0.30" in md
 
     def test_no_evidence_flag_skips_scoring(self, httpx_mock, tmp_path, monkeypatch):
         called = {"n": 0}

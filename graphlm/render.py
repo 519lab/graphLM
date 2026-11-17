@@ -62,7 +62,7 @@ def importance_summary(graph: CodebaseGraph, top: int = 3) -> str | None:
         if not importance:
             return None
         ranked = sorted(importance.items(), key=lambda kv: (-kv[1], kv[0]))[:top]
-    named = ", ".join(f"{p} ({s:.2f})" for p, s in ranked)
+    named = ", ".join(f"{md_code(p)} ({s:.2f})" for p, s in ranked)
     return f"most load-bearing: {named}"
 
 
@@ -166,7 +166,7 @@ def render_markdown(graph: CodebaseGraph) -> str:
         lines.append("|------|-----|------|")
         for edge in sorted(graph.import_edges, key=lambda e: (e.from_path, e.to_path)):
             lines.append(
-                f"| {md_code(edge.from_path)} | {md_code(edge.to_path)} | {md_text(edge.kind)} |"
+                f"| {md_code(edge.from_path, cell=True)} | {md_code(edge.to_path, cell=True)} | {md_text(edge.kind, cell=True)} |"
             )
         lines.append("")
 
@@ -182,7 +182,7 @@ def render_markdown(graph: CodebaseGraph) -> str:
             lines.append("|------|------|-------------|")
             for mod in sorted(graph.modules, key=lambda m: m.path):
                 lines.append(
-                    f"| {md_code(mod.path)} | {md_text(mod.name)} | {md_text(mod.description)} |"
+                    f"| {md_code(mod.path, cell=True)} | {md_text(mod.name, cell=True)} | {md_text(mod.description, cell=True)} |"
                 )
         else:
             # Load-bearing first (fused importance desc), path as a stable tiebreak.
@@ -196,8 +196,8 @@ def render_markdown(graph: CodebaseGraph) -> str:
                 score = importance.get(mod.path)
                 cell = "—" if score is None else f"{score:.2f}"
                 lines.append(
-                    f"| {cell} | {md_code(mod.path)} | {md_text(mod.name)} "
-                    f"| {md_text(mod.description)} |"
+                    f"| {cell} | {md_code(mod.path, cell=True)} | {md_text(mod.name, cell=True)} "
+                    f"| {md_text(mod.description, cell=True)} |"
                 )
         lines.append("")
 
@@ -216,7 +216,7 @@ def render_markdown(graph: CodebaseGraph) -> str:
         lines.append("|-----------:|------|-----:|-------:|")
         for f in fi[:40]:
             lines.append(
-                f"| {f.fused:.2f} | {md_code(f.path)} | {f.role:.2f} | {f.degree} |"
+                f"| {f.fused:.2f} | {md_code(f.path, cell=True)} | {f.role:.2f} | {f.degree} |"
             )
         lines.append("")
 
@@ -227,8 +227,8 @@ def render_markdown(graph: CodebaseGraph) -> str:
         lines.append("|--------|-------------|-------------|")
         for flow in graph.data_flow:
             lines.append(
-                f"| {md_text(flow.source)} | {md_text(flow.destination)} "
-                f"| {md_text(flow.description)} |"
+                f"| {md_text(flow.source, cell=True)} | {md_text(flow.destination, cell=True)} "
+                f"| {md_text(flow.description, cell=True)} |"
             )
         lines.append("")
 
@@ -242,8 +242,8 @@ def render_markdown(graph: CodebaseGraph) -> str:
             lines.append("|--------|------|-------------|")
             for col in table.columns:
                 lines.append(
-                    f"| {md_code(col.name)} | {md_text(col.type)} "
-                    f"| {md_text(col.constraints or '-')} |"
+                    f"| {md_code(col.name, cell=True)} | {md_text(col.type, cell=True)} "
+                    f"| {md_text(col.constraints or '-', cell=True)} |"
                 )
             lines.append("")
 
@@ -253,7 +253,7 @@ def render_markdown(graph: CodebaseGraph) -> str:
         lines.append("| Test File | Covers |")
         lines.append("|-----------|--------|")
         for test in sorted(graph.test_organization, key=lambda t: t.file):
-            lines.append(f"| {md_code(test.file)} | {md_text(test.covers)} |")
+            lines.append(f"| {md_code(test.file, cell=True)} | {md_text(test.covers, cell=True)} |")
         lines.append("")
 
     # Architecture notes
@@ -274,8 +274,8 @@ def render_markdown(graph: CodebaseGraph) -> str:
                 lines.append("|--------|------|-------------|")
                 for sym in sorted(fs.symbols, key=lambda s: s.name):
                     lines.append(
-                        f"| {md_code(sym.name)} | {md_text(sym.kind)} "
-                        f"| {md_text(sym.description)} |"
+                        f"| {md_code(sym.name, cell=True)} | {md_text(sym.kind, cell=True)} "
+                        f"| {md_text(sym.description, cell=True)} |"
                     )
                 lines.append("")
 
@@ -286,8 +286,8 @@ def render_markdown(graph: CodebaseGraph) -> str:
         lines.append("|------|------|------|-------------|")
         for ep in sorted(graph.entry_points, key=lambda e: (e.path, e.name)):
             lines.append(
-                f"| {md_code(ep.path)} | {md_code(ep.name)} | {md_text(ep.kind)} "
-                f"| {md_text(ep.description)} |"
+                f"| {md_code(ep.path, cell=True)} | {md_code(ep.name, cell=True)} | {md_text(ep.kind, cell=True)} "
+                f"| {md_text(ep.description, cell=True)} |"
             )
         lines.append("")
 
@@ -297,7 +297,7 @@ def render_markdown(graph: CodebaseGraph) -> str:
         lines.append("| Find | Location |")
         lines.append("|------|----------|")
         for ref in sorted(graph.quick_reference, key=lambda r: r.query):
-            lines.append(f"| {md_text(ref.query)} | {md_code(ref.location)} |")
+            lines.append(f"| {md_text(ref.query, cell=True)} | {md_code(ref.location, cell=True)} |")
         lines.append("")
 
     # Import cycles — production first, test-code cycles grouped and tagged

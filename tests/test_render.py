@@ -1268,7 +1268,7 @@ class TestEvidenceSummary:
         text = evidence_summary(self._meta(es))
         assert "mean 0.81" in text
         assert "20 scored, 2 skipped" in text
-        assert "models.py 0.23" in text
+        assert "`models.py` 0.23" in text
 
     def test_na_mean_when_nothing_scored(self):
         from graphlm.models import EvidenceSupport

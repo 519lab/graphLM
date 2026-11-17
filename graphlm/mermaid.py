@@ -65,7 +65,9 @@ def _mermaid_label(label: str) -> str:
     diagram — so it is shown as a visible escape instead. Labels are
     repository paths (or model-written ones), so both are reachable.
     """
-    return no_controls(label).replace('"', "#quot;")
+    # A label starting with a backtick switches Mermaid into "markdown
+    # string" mode; #96; is the backtick entity.
+    return no_controls(label).replace('"', "#quot;").replace("`", "#96;")
 
 
 def _assign_ids(labels: list[str]) -> dict[str, str]:
