@@ -2,7 +2,7 @@
 
 Why a Mermaid block at all: GitHub (and most Markdown viewers) render Mermaid
 fences natively, so the map gets a *picture* with no CDN, no build step, and no
-separate file — unlike ``GRAPH.html``, which loads D3 from a CDN and is blank
+separate file — unlike ``GRAPH.html``, which loads a pinned D3 build from a CDN and is blank
 offline. Why directory-level: a file-level graph of a real project is hundreds
 of nodes and unreadable in a Markdown page; collapsing each file to its parent
 directory gives a package-dependency view that fits on one screen, and the

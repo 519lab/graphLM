@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 from pathlib import Path
 
@@ -32,6 +34,35 @@ def _json_for_script(value: object) -> str:
     )
 
 
+# The template's one inline script opens with a bare `<script>` (the D3 tag
+# has attributes). This locates graphlm's own template script — it is not a
+# filter over untrusted HTML; graph data inside it is escaped by
+# _json_for_script, so it can never contain `</script>`.
+_INLINE_OPEN = "<script>"
+_INLINE_CLOSE = "</script>"
+
+
+def _with_csp_hash(html: str) -> str:
+    """Fill the CSP meta's script hash with the hash of the inline script.
+
+    The policy allows exactly two scripts: the pinned, integrity-checked D3
+    build and this file's own inline script — by its SHA-256, computed here
+    because the script embeds this graph's data. An injected ``<script>`` or
+    ``<script src=…>`` cannot run, and nothing can be fetched or posted. The
+    meta tag precedes every script, so the first ``{CSP_SCRIPT_HASH}`` is the
+    placeholder even if graph data repeats the string; ``_json_for_script``
+    escapes ``<``, so the data cannot end the inline script early.
+    """
+    start = html.find(_INLINE_OPEN)
+    end = html.find(_INLINE_CLOSE, start + len(_INLINE_OPEN)) if start != -1 else -1
+    if end == -1:  # template without an inline script: allow none
+        return html.replace("'{CSP_SCRIPT_HASH}' ", "", 1)
+    script = html[start + len(_INLINE_OPEN):end]
+    digest = hashlib.sha256(script.encode("utf-8")).digest()
+    token = "sha256-" + base64.b64encode(digest).decode("ascii")
+    return html.replace("{CSP_SCRIPT_HASH}", token, 1)
+
+
 def render_html(graph: CodebaseGraph) -> str:
     """Render a CodebaseGraph as a self-contained HTML file with D3.js.
 
@@ -47,4 +78,4 @@ def render_html(graph: CodebaseGraph) -> str:
     # template placeholder and leave `const _PALETTE = {_PALETTE}` (#141).
     result = tpl.replace("{_PALETTE}", palette_js, 1)
     result = result.replace("{EMBEDDED_JSON}", data, 1)
-    return result
+    return _with_csp_hash(result)

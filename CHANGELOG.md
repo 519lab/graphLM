@@ -7,6 +7,11 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- **`GRAPH.html` now loads one exact, integrity-checked build of D3 and runs no other script.** It used a floating `d3.v7` URL with no integrity check, so whoever controlled that URL could run script in every generated graph page. The page now loads `d3@7.9.2` from jsDelivr with a Subresource Integrity hash, and a Content-Security-Policy allows only that file and the page's own inline script (by hash). The page still needs network access to draw the graph.
+
+### Infrastructure
+- **Release and CI workflows are harder to tamper with.** Every GitHub Action is pinned to a full commit SHA instead of a movable tag or branch. The release build refuses a `v*` tag that is not on `main`. Dependabot auto-merge now checks who opened the pull request rather than who triggered the run, and no longer auto-merges GitHub Actions updates, which run with release credentials.
 ### Fixed
 - **A scan can no longer hang, exhaust memory or crash on a hostile tree.** A named pipe (FIFO) in the scanned directory blocked the scan forever, because every non-directory entry was opened as a file; only regular files are read now, and sockets, device nodes and broken symlinks are skipped too. Files were read whole before being cut to `--max-file-chars`, so a multi-gigabyte log or dump cost its full size in memory; reads now stop at 4 MiB (the line count used for cycle risk is still exact), and a file past that is sent as its head. A directory tree nested more than about 1,000 levels deep crashed the scan with a `RecursionError`; the walk no longer recurses. On Python 3.11 and 3.12, a symlink loop (`a.py → b.py → a.py`) in the project crashed the scan; loops are now skipped like broken links.
 - **Files and directories whose names contain a newline or other control character are skipped.** No real project needs such names, and they garbled the directory tree.
