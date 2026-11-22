@@ -491,7 +491,7 @@ tests/
 
 ## Contributing
 
-Contributions are welcome — bug reports, fixes, docs, and new language support especially. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the test/mypy commands, and the security invariants to preserve. Please also read the [Code of Conduct](CODE_OF_CONDUCT.md).
+Contributions are welcome — bug reports, fixes, docs, and new language support especially. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the test/mypy commands, and the security invariants to preserve. Please also read the 519lab [Code of Conduct](https://github.com/519lab/.github/blob/develop/CODE_OF_CONDUCT.md).
 
 ## Security
 
