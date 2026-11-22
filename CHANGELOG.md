@@ -7,6 +7,9 @@ and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
 
+### Docs
+- The contributing guide and PR template said to branch off `main` and open pull requests against it. The default branch is `develop`, and `main` only changes through the promotion pull request, so they now say `develop`. graphLM's own copy of the Contributor Covenant 2.1 is removed: the repository now uses the 519lab organization's Code of Conduct (Contributor Covenant 3.0, reports to conduct@519lab.com), and the README and contributing guide link to it.
+
 ## [0.7.3] - 2026-11-17
 
 ### Infrastructure
