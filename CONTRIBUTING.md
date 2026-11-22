@@ -14,7 +14,7 @@ uv run pytest -q                              # full suite — no network, the L
 uv run mypy graphlm --ignore-missing-imports
 ```
 
-Branch off `main`, make your change with tests, keep mypy clean, add a CHANGELOG
+Branch off `develop`, make your change with tests, keep mypy clean, add a CHANGELOG
 entry, and open a PR. Details below.
 
 ## Development setup
@@ -93,14 +93,14 @@ If a change would relax one of these, say so explicitly in the PR and explain wh
 
 ## Branching, commits, and PRs
 
-- **Branch off `main`** — never commit to `main` directly. Name branches
+- **Branch off `develop`** — never commit to `develop` or `main` directly. Name branches
   `<type>/<kebab-summary>` (e.g. `fix/src-layout-edges`, `feat/js-parser`).
 - **One coherent change per PR.** Split unrelated themes.
 - **Conventional Commits with a scope**: `fix(scanner): …`, `feat(cli): …`,
   `docs: …`. Short imperative subject; a body explaining the *what and why* when
   the change isn't self-evident. Reference an issue/PR number (`#NN`) when
   relevant.
-- **Open the PR against `main`.** The body should have a Summary, what changed and
+- **Open the PR against `develop`.** `main` only changes through the promotion pull request (below). The body should have a Summary, what changed and
   why, and a **Verification** section (the test/mypy results you saw). Fill in the
   PR template.
 - **Bugs get a tracking issue.** For anything that affects correctness, scoring,
@@ -172,5 +172,5 @@ merge commits are the record of who decided to release.
 
 ## Code of conduct
 
-By participating you agree to abide by our
-[Code of Conduct](CODE_OF_CONDUCT.md).
+By participating you agree to abide by the 519lab
+[Code of Conduct](https://github.com/519lab/.github/blob/develop/CODE_OF_CONDUCT.md).

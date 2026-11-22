@@ -27,7 +27,7 @@ what "done" looks like here.
 
 ## Checklist
 
-- [ ] Branched off `main`; one coherent change per PR
+- [ ] Branched off `develop`; one coherent change per PR
 - [ ] Tests added or updated for the change
 - [ ] CHANGELOG updated under `## [Unreleased]` (if externally observable)
 - [ ] Docs updated in lockstep (README / `CLAUDE.md` / prompt text) if a flag,
