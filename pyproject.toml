@@ -56,7 +56,7 @@ java = ["tree-sitter-java>=0.23,<0.24"]
 rust = ["tree-sitter-rust>=0.24,<0.25"]
 # C# Tree-sitter grammar. Resolver in `graphlm/parsers/csharp.py`. Same
 # degradation contract: missing extra → zero C# edges, one log line.
-csharp = ["tree-sitter-c-sharp>=0.23,<0.24"]
+csharp = ["tree-sitter-c-sharp>=0.23,<0.25"]
 # C and C++ Tree-sitter grammars. Resolver in `graphlm/parsers/cpp.py`.
 # Quoted #include only; angle-bracket system headers are dropped.
 cpp = [
